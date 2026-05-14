@@ -15,17 +15,24 @@ from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 
-from .auth import get_current_user, get_optional_user, login_user
+from .auth import get_current_user, get_optional_user, google_login, google_register, login_user
 from .card_pdf import build_card_pdf
 from .database import get_db
 from .models import ScanHistory, Student, StudentCard, User
 from .pdf import build_pdf
 from .pipeline import (
     detect_qr,
+    draw_canny_preview,
+    draw_ocr_blocks_on_image,
+    draw_quad_on_image,
     extract_student_info,
+    find_document_contour,
+    img_to_data_url,
     layout_and_ocr,
     load_image,
+    ocr_preprocessed,
     pil_to_cv,
+    preprocess_for_ocr,
     resize_image,
     warp_perspective,
 )
@@ -78,13 +85,19 @@ def _student_to_dict(s: Student, scan_id: str | None = None) -> dict:
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
 class LoginPayload(BaseModel):
-    username: str
+    identifier: str           # username HOẶC email
     password: str
 
 
 class RegisterPayload(BaseModel):
     username: str
     password: str
+    email: str | None = None
+    full_name: str | None = None
+
+
+class GooglePayload(BaseModel):
+    access_token: str         # OAuth access token lấy từ Google Identity Services (FE)
 
 
 @app.post("/register", status_code=201)
@@ -94,7 +107,17 @@ def register(payload: RegisterPayload, db: DBSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Tên đăng nhập đã tồn tại.")
     if len(payload.password) < 6:
         raise HTTPException(status_code=422, detail="Mật khẩu phải có ít nhất 6 ký tự.")
-    user = User(username=payload.username, password_hash=hash_password(payload.password))
+
+    email_norm = payload.email.strip().lower() if payload.email else None
+    if email_norm and db.query(User).filter(User.email == email_norm).first():
+        raise HTTPException(status_code=409, detail="Email đã được sử dụng.")
+
+    user = User(
+        username=payload.username,
+        password_hash=hash_password(payload.password),
+        email=email_norm,
+        full_name=payload.full_name,
+    )
     db.add(user)
     db.commit()
     return {"message": "Đăng ký thành công."}
@@ -102,7 +125,19 @@ def register(payload: RegisterPayload, db: DBSession = Depends(get_db)):
 
 @app.post("/login")
 def login(payload: LoginPayload, response: Response, db: DBSession = Depends(get_db)):
-    return login_user(payload.username, payload.password, response, db)
+    return login_user(payload.identifier, payload.password, response, db)
+
+
+@app.post("/auth/google/login")
+def auth_google_login(payload: GooglePayload, response: Response, db: DBSession = Depends(get_db)):
+    """Đăng nhập bằng Google. Báo lỗi nếu tài khoản Google chưa đăng ký."""
+    return google_login(payload.access_token, response, db)
+
+
+@app.post("/auth/google/register")
+def auth_google_register(payload: GooglePayload, response: Response, db: DBSession = Depends(get_db)):
+    """Đăng ký bằng Google. Nếu đã từng đăng ký thì vẫn đăng nhập, kèm cờ already_existed."""
+    return google_register(payload.access_token, response, db)
 
 
 @app.post("/logout")
@@ -113,7 +148,13 @@ def logout(response: Response):
 
 @app.get("/me")
 def me(current_user: User = Depends(get_current_user)):
-    return {"id": str(current_user.id), "username": current_user.username}
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "avatar_url": current_user.avatar_url,
+    }
 
 
 # ─── Tra cứu sinh viên theo MSSV (dùng cho cả QR lẫn nhập tay) ───────────────
@@ -309,65 +350,143 @@ async def process_scan(
         # ════════════════════════════════════════════════════════════════════
         #  CHẾ ĐỘ OCR – xử lý từng bước, trả steps + match_result
         # ════════════════════════════════════════════════════════════════════
-        steps: List[Dict[str, str]] = []
+        steps: List[Dict[str, Any]] = []
 
         # Bước 1: Tải & tiền xử lý
         try:
             image = resize_image(load_image(raw_data))
             cv_image = pil_to_cv(image)
-            steps.append({"name": "Tải & tiền xử lý ảnh", "status": "success"})
-        except Exception:
-            steps.append({"name": "Tải & tiền xử lý ảnh", "status": "fail"})
-            raise HTTPException(status_code=422, detail="Không đọc được file ảnh.")
-
-        # Bước 2: Phát hiện biên tài liệu
-        try:
-            warped = warp_perspective(cv_image)
             steps.append({
-                "name": "Phát hiện biên tài liệu",
-                "status": "success" if warped.used_warp else "warning",
+                "name": "1. Tải & chuẩn hoá ảnh đầu vào",
+                "status": "success",
+                "description": (
+                    f"Đọc ảnh, sửa hướng EXIF và thu nhỏ về tối đa 2000px "
+                    f"(kích thước hiện tại: {image.size[0]}×{image.size[1]}px)."
+                ),
+                "image_url": img_to_data_url(cv_image),
             })
         except Exception:
-            steps.append({"name": "Phát hiện biên tài liệu", "status": "fail"})
-            raise HTTPException(status_code=422, detail="Lỗi khi phát hiện biên.")
+            steps.append({"name": "1. Tải & chuẩn hoá ảnh đầu vào", "status": "fail", "description": "Không đọc được file ảnh.", "image_url": None})
+            raise HTTPException(status_code=422, detail="Không đọc được file ảnh.")
 
+        # Bước 2: Edge detection (Canny) — minh hoạ
+        try:
+            edge_preview = draw_canny_preview(cv_image)
+            steps.append({
+                "name": "2. Phát hiện cạnh (Canny + GaussianBlur)",
+                "status": "success",
+                "description": "Khử nhiễu Gaussian rồi dò cạnh bằng Canny (50, 150) để tìm các đường biên có thể là tài liệu.",
+                "image_url": img_to_data_url(edge_preview),
+            })
+        except Exception:
+            pass
+
+        # Bước 3: Phát hiện biên tài liệu — vẽ tứ giác lên ảnh gốc
+        quad = find_document_contour(cv_image)
+        if quad is not None:
+            quad_overlay = draw_quad_on_image(cv_image, quad.tolist())
+            steps.append({
+                "name": "3. Khoanh vùng tài liệu (tứ giác 4 góc)",
+                "status": "success",
+                "description": "Lọc contour kín gần hình tứ giác, chọn vùng có diện tích lớn nhất. 4 chấm đỏ là 4 góc phát hiện được (TL/TR/BR/BL).",
+                "image_url": img_to_data_url(quad_overlay),
+            })
+        else:
+            steps.append({
+                "name": "3. Khoanh vùng tài liệu (tứ giác 4 góc)",
+                "status": "warning",
+                "description": "Không tìm được tứ giác đủ rõ — sẽ dùng nguyên ảnh đầu vào, bỏ qua bước warp.",
+                "image_url": img_to_data_url(cv_image),
+            })
+
+        # Bước 4: Warp perspective — ảnh đã được cắt + nắn thẳng
+        warped = warp_perspective(cv_image)
         warped_bytes = _warped_to_png_bytes(warped.image)
-
-        # Bước 3: Căn chỉnh góc nhìn
         steps.append({
-            "name": "Căn chỉnh góc nhìn (Warp)",
+            "name": "4. Cắt & nắn phối cảnh (Warp Perspective)",
             "status": "success" if warped.used_warp else "warning",
+            "description": (
+                f"Áp dụng phép biến đổi phối cảnh đưa tài liệu về hình chữ nhật thẳng "
+                f"({warped.image.shape[1]}×{warped.image.shape[0]}px)."
+                if warped.used_warp
+                else "Bỏ qua warp do không có 4 góc rõ — giữ nguyên ảnh."
+            ),
+            "image_url": img_to_data_url(warped.image),
         })
 
-        # Bước 4: OCR
+        # Bước 5: Tiền xử lý ảnh cho OCR (grayscale + CLAHE + threshold + denoise)
         try:
-            blocks = layout_and_ocr(warped.image)
+            preprocessed = preprocess_for_ocr(warped.image)
+            steps.append({
+                "name": "5. Tăng cường ảnh cho OCR",
+                "status": "success",
+                "description": "Chuỗi: Grayscale → CLAHE (tăng tương phản cục bộ) → Adaptive Threshold → Median Blur. Đây chính là ảnh mà Tesseract sẽ đọc.",
+                "image_url": img_to_data_url(preprocessed),
+            })
+        except Exception:
+            steps.append({"name": "5. Tăng cường ảnh cho OCR", "status": "fail", "description": "Lỗi khi tiền xử lý ảnh.", "image_url": None})
+            raise HTTPException(status_code=422, detail="Lỗi tiền xử lý ảnh.")
+
+        # Bước 6: OCR — vẽ bounding box của từng dòng lên ảnh tiền xử lý
+        try:
+            blocks = ocr_preprocessed(preprocessed)
             raw_text = " ".join(
                 line["text"] for block in blocks for line in block.get("lines", [])
             ).strip()
+            num_lines = sum(len(b.get("lines", [])) for b in blocks)
+            avg_conf = (
+                sum(line["conf"] for b in blocks for line in b.get("lines", [])) / num_lines
+                if num_lines else 0.0
+            )
+            ocr_overlay = draw_ocr_blocks_on_image(preprocessed, blocks)
             steps.append({
-                "name": "Nhận dạng văn bản (OCR)",
+                "name": "6. Nhận dạng văn bản (Tesseract OCR)",
                 "status": "success" if raw_text else "warning",
+                "description": (
+                    f"Tesseract phát hiện {num_lines} dòng văn bản (độ tin cậy trung bình {avg_conf:.1f}%). "
+                    f"Các khung đỏ là vùng chữ tìm được."
+                    if raw_text else "Không nhận dạng được dòng chữ nào."
+                ),
+                "image_url": img_to_data_url(ocr_overlay),
             })
         except HTTPException:
             raise
         except Exception:
-            steps.append({"name": "Nhận dạng văn bản (OCR)", "status": "fail"})
+            steps.append({"name": "6. Nhận dạng văn bản (Tesseract OCR)", "status": "fail", "description": "Lỗi khi chạy OCR.", "image_url": None})
             raise HTTPException(status_code=422, detail="Lỗi khi nhận dạng văn bản.")
 
-        # Bước 5: Đối chiếu dữ liệu sinh viên
+        # Bước 7: Bóc tách & đối chiếu dữ liệu sinh viên
         ocr_info = extract_student_info(raw_text)
         mssv = ocr_info.get("student_id")
         student = db.query(Student).filter(Student.student_id == mssv).first() if mssv else None
 
+        extracted_summary = " · ".join(
+            f"{k}: {v}" for k, v in [
+                ("MSSV", ocr_info.get("student_id")),
+                ("Họ tên", ocr_info.get("full_name")),
+                ("Ngày sinh", ocr_info.get("birth_date")),
+                ("Email", ocr_info.get("email")),
+            ] if v
+        ) or "Không bóc được trường nào."
+
         if student:
             match_result = 1
             student_info = _student_to_dict(student)
-            steps.append({"name": "Đối chiếu dữ liệu sinh viên", "status": "success"})
+            steps.append({
+                "name": "7. Bóc tách & đối chiếu dữ liệu sinh viên",
+                "status": "success",
+                "description": f"Bóc được: {extracted_summary}. → Khớp MSSV {mssv} trong CSDL.",
+                "image_url": None,
+            })
         else:
             match_result = 0
             student_info = {**ocr_info, "avatar_url": avatar_data_url}
-            steps.append({"name": "Đối chiếu dữ liệu sinh viên", "status": "fail"})
+            steps.append({
+                "name": "7. Bóc tách & đối chiếu dữ liệu sinh viên",
+                "status": "fail",
+                "description": f"Bóc được: {extracted_summary}. → Không khớp với sinh viên nào trong CSDL.",
+                "image_url": None,
+            })
 
         scan_id = uuid4().hex
         if current_user:

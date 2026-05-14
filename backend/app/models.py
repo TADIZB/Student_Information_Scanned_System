@@ -10,13 +10,32 @@ from .database import Base
 
 
 class User(Base):
-    """Bảng users – tài khoản đăng nhập."""
+    """Bảng users – tài khoản đăng nhập (hỗ trợ local + OAuth)."""
 
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(100), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    username = Column(String(100), unique=True, nullable=True)        # nullable: user Google có thể không có
+    password_hash = Column(String(255), nullable=True)                # nullable: user OAuth không có mật khẩu
+    email = Column(String(200), unique=True, nullable=True)
+    full_name = Column(String(200), nullable=True)
+    avatar_url = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserIdentity(Base):
+    """Bảng user_identities – liên kết provider OAuth với user."""
+
+    __tablename__ = "user_identities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(20), nullable=False)        # 'google' | 'local' | ...
+    provider_uid = Column(String(255), nullable=False)   # Google "sub"
+    email = Column(String(200), nullable=True)
+    access_token = Column(Text, nullable=True)
+    refresh_token = Column(Text, nullable=True)
+    token_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

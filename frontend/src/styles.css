@@ -563,6 +563,52 @@ button:disabled {
   margin: 0;
 }
 
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 18px 0 12px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.google-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.google-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .full-width {
   width: 100%;
   padding: 14px;
@@ -842,6 +888,47 @@ button.active-btn {
   justify-content: center;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+/* ── OCR step card (có ảnh minh hoạ) ───────────────────────── */
+.ocr-step-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #9ca3af;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.35s ease, transform 0.35s ease, border-left-color 0.35s ease;
+}
+.ocr-step-card.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ocr-step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ocr-step-header .step-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.ocr-step-desc {
+  margin: 8px 0 10px 20px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+}
+.ocr-step-image {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  background: #0f172a;
+  border-radius: 8px;
+  margin-top: 4px;
 }
 
 /* ── Manual MSSV lookup ─────────────────────────────────── */

@@ -17,23 +17,31 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
 
+  // Tên hiển thị: ưu tiên username → full_name → email
+  const displayName = (u: { username: string | null; full_name: string | null; email: string | null }) =>
+    u.username || u.full_name || u.email;
+
   useEffect(() => {
     getMe()
-      .then((data) => setUsername(data.username))
+      .then((data) => setUsername(displayName(data)))
       .catch(() => setUsername(null))
       .finally(() => setChecking(false));
   }, []);
 
   const handleLogin = async () => {
     const data = await getMe();
-    setUsername(data.username);
+    setUsername(displayName(data));
     setShowAuth(false);
     setView("app");
   };
 
   const handleLogout = async () => {
-    await logout();
-    setUsername(null);
+    try {
+      await logout();
+    } finally {
+      // Reload lại trang để xoá toàn bộ state, cache hình ảnh, lịch sử... của user vừa đăng xuất
+      window.location.reload();
+    }
   };
 
   const handleScanSuccess = (_result: ScanResult) => {};

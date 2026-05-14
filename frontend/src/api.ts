@@ -36,6 +36,8 @@ export interface StudentInfo {
 export interface ScanStep {
   name: string;
   status: "success" | "fail" | "warning" | "pending";
+  description?: string | null;
+  image_url?: string | null;   // data URL minh hoạ kết quả của bước
 }
 
 export interface ScanResult {
@@ -65,12 +67,39 @@ export interface ScanDetail extends ScanRecord {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function register(username: string, password: string): Promise<void> {
-  await api.post("/register", { username, password });
+export interface AuthUser {
+  id: string;
+  username: string | null;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
 }
 
-export async function login(username: string, password: string): Promise<{ username: string }> {
-  const res = await api.post("/login", { username, password });
+export interface RegisterInput {
+  username: string;
+  password: string;
+  email?: string;
+  full_name?: string;
+}
+
+export async function register(input: RegisterInput): Promise<void> {
+  await api.post("/register", input);
+}
+
+export async function login(identifier: string, password: string): Promise<AuthUser> {
+  const res = await api.post("/login", { identifier, password });
+  return res.data;
+}
+
+export async function googleLogin(accessToken: string): Promise<AuthUser> {
+  const res = await api.post("/auth/google/login", { access_token: accessToken });
+  return res.data;
+}
+
+export async function googleRegister(
+  accessToken: string,
+): Promise<AuthUser & { already_existed: boolean }> {
+  const res = await api.post("/auth/google/register", { access_token: accessToken });
   return res.data;
 }
 
@@ -78,7 +107,7 @@ export async function logout(): Promise<void> {
   await api.post("/logout");
 }
 
-export async function getMe(): Promise<{ id: string; username: string }> {
+export async function getMe(): Promise<AuthUser> {
   const res = await api.get("/me");
   return res.data;
 }

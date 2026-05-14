@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import io
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
@@ -39,6 +40,68 @@ def pil_to_cv(image: Image.Image) -> np.ndarray:
 
 def cv_to_pil(image: np.ndarray) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+
+# ─── Helpers cho visualization các bước OCR ──────────────────────────────────
+
+def img_to_data_url(image: np.ndarray, max_dim: int = 1000) -> str:
+    """Mã hoá ảnh CV (BGR hoặc grayscale) → PNG data URL, có thu nhỏ nếu lớn."""
+    if image is None:
+        return ""
+    img = image
+    if img.ndim == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    h, w = img.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".png", img)
+    if not ok:
+        return ""
+    return f"data:image/png;base64,{base64.b64encode(buf.tobytes()).decode()}"
+
+
+def draw_canny_preview(image: np.ndarray) -> np.ndarray:
+    """Trả về ảnh edge map (Canny) để minh hoạ bước phát hiện biên."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edged = cv2.Canny(blurred, 50, 150)
+    return cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
+
+
+def draw_quad_on_image(image: np.ndarray, quad: List[List[int]]) -> np.ndarray:
+    """Vẽ tứ giác phát hiện được + chấm 4 góc lên bản copy của ảnh."""
+    out = image.copy()
+    pts = np.array(quad, dtype=np.int32).reshape((-1, 1, 2))
+    cv2.polylines(out, [pts], isClosed=True, color=(0, 200, 60), thickness=4)
+    labels = ["TL", "TR", "BR", "BL"]
+    for i, (x, y) in enumerate(quad):
+        cv2.circle(out, (int(x), int(y)), 14, (40, 40, 220), -1)
+        cv2.circle(out, (int(x), int(y)), 16, (255, 255, 255), 2)
+        cv2.putText(
+            out, labels[i % 4], (int(x) + 18, int(y) + 6),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (40, 40, 220), 2, cv2.LINE_AA,
+        )
+    return out
+
+
+def draw_ocr_blocks_on_image(image: np.ndarray, blocks: List[Dict[str, Any]]) -> np.ndarray:
+    """Vẽ khung từng dòng OCR + số thứ tự lên bản copy của ảnh."""
+    out = image.copy()
+    idx = 1
+    for blk in blocks:
+        for line in blk.get("lines", []):
+            x1, y1, x2, y2 = [int(v) for v in line["bbox"]]
+            cv2.rectangle(out, (x1, y1), (x2, y2), (38, 38, 220), 2)
+            label = str(idx)
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+            cv2.rectangle(out, (x1, y1 - th - 6), (x1 + tw + 6, y1), (38, 38, 220), -1)
+            cv2.putText(
+                out, label, (x1 + 3, y1 - 4),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA,
+            )
+            idx += 1
+    return out
 
 
 # ─── Warp perspective ────────────────────────────────────────────────────────
@@ -225,16 +288,10 @@ def _best_tesseract_lang() -> str:
     return "eng"
 
 
-def layout_and_ocr(image: np.ndarray) -> List[Dict[str, Any]]:
-    """
-    Chạy Tesseract trên ảnh đã được tối ưu hóa cho OCR.
-    Trả về các block chữ với bbox để vẽ overlay.
-    """
-    preprocessed = preprocess_for_ocr(image)
+def ocr_preprocessed(preprocessed: np.ndarray) -> List[Dict[str, Any]]:
+    """Chạy Tesseract trên ảnh đã tiền xử lý sẵn. bbox trả về thuộc không gian ảnh tiền xử lý."""
     lang = _best_tesseract_lang()
-
-    # PSM 6: giả định một block văn bản đồng nhất (phù hợp với thẻ)
-    config = f"--psm 6 --oem 3"
+    config = "--psm 6 --oem 3"
     data = pytesseract.image_to_data(
         preprocessed,
         lang=lang,
@@ -245,7 +302,7 @@ def layout_and_ocr(image: np.ndarray) -> List[Dict[str, Any]]:
     lines = _group_words_into_lines(data)
     blocks: List[Dict[str, Any]] = []
     for line in lines:
-        if line["conf"] < 5:  # Chỉ bỏ kết quả hoàn toàn vô nghĩa
+        if line["conf"] < 5:
             continue
         blocks.append(
             {
@@ -256,6 +313,11 @@ def layout_and_ocr(image: np.ndarray) -> List[Dict[str, Any]]:
             }
         )
     return blocks
+
+
+def layout_and_ocr(image: np.ndarray) -> List[Dict[str, Any]]:
+    """Wrapper tiện dụng: tự preprocess rồi OCR (giữ tương thích code cũ)."""
+    return ocr_preprocessed(preprocess_for_ocr(image))
 
 
 # ─── Extract student info từ OCR text ────────────────────────────────────────

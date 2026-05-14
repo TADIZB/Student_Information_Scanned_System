@@ -22,7 +22,6 @@ interface Props {
   onLoginClick?: () => void;
 }
 
-// Hiển thị MSSV: 4 số đầu (năm) màu đỏ, phần còn lại màu đen
 const renderMssvStyled = (mssv: string | null) => {
   if (!mssv) return <span>—</span>;
   const year = mssv.slice(0, 4);
@@ -105,7 +104,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
   // ── Animate OCR steps ─────────────────────────────────────────────────────
   const animateSteps = (steps: ScanStep[]) => {
-    // Khởi tạo tất cả là pending
+    // Khởi tạo tất cả là pending (giữ image_url + description sẵn để fade-in)
     const init = steps.map((s) => ({ ...s, status: "pending" as const, visible: false }));
     setVisibleSteps(init);
     steps.forEach((step, i) => {
@@ -115,7 +114,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
             idx === i ? { ...step, visible: true } : s
           )
         );
-      }, (i + 1) * 500);
+      }, (i + 1) * 700);
     });
   };
 
@@ -325,26 +324,38 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
       {/* ── Steps xử lý OCR ────────────────────────────────────────────────── */}
       {scanMode === "ocr" && visibleSteps.length > 0 && (
         <div className="ocr-steps">
-          <p className="ocr-steps-title">Quá trình xử lý</p>
-          {visibleSteps.map((step, i) => (
-            <div key={i} className="ocr-step">
-              <span
-                className="step-dot"
-                style={{ background: step.visible ? STEP_COLOR[step.status] : STEP_COLOR.pending }}
-              />
-              <span
-                className="step-name"
-                style={{ color: step.visible ? STEP_COLOR[step.status] : STEP_COLOR.pending }}
+          <p className="ocr-steps-title">Quá trình xử lý từng bước</p>
+          {visibleSteps.map((step, i) => {
+            const color = step.visible ? STEP_COLOR[step.status] : STEP_COLOR.pending;
+            return (
+              <div
+                key={i}
+                className={`ocr-step-card${step.visible ? " visible" : ""}`}
+                style={{ borderLeftColor: color }}
               >
-                {step.name}
-              </span>
-              {step.visible && (
-                <span className="step-badge" style={{ background: STEP_COLOR[step.status] }}>
-                  {step.status === "success" ? "✓" : step.status === "warning" ? "!" : "✗"}
-                </span>
-              )}
-            </div>
-          ))}
+                <div className="ocr-step-header">
+                  <span className="step-dot" style={{ background: color }} />
+                  <span className="step-name" style={{ color }}>{step.name}</span>
+                  {step.visible && (
+                    <span className="step-badge" style={{ background: color }}>
+                      {step.status === "success" ? "✓" : step.status === "warning" ? "!" : step.status === "fail" ? "✗" : "…"}
+                    </span>
+                  )}
+                </div>
+                {step.visible && step.description && (
+                  <p className="ocr-step-desc">{step.description}</p>
+                )}
+                {step.visible && step.image_url && (
+                  <img
+                    src={step.image_url}
+                    alt={step.name}
+                    className="ocr-step-image"
+                    loading="lazy"
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -427,10 +438,10 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                       {r.scan_type === "lookup"
                         ? <span className="match-badge match-ok">Tìm thấy</span>
                         : r.match_result !== null && (
-                            <span className={`match-badge ${r.match_result === 1 ? "match-ok" : "match-fail"}`}>
-                              {r.match_result === 1 ? "Khớp" : "Không khớp"}
-                            </span>
-                          )
+                          <span className={`match-badge ${r.match_result === 1 ? "match-ok" : "match-fail"}`}>
+                            {r.match_result === 1 ? "Khớp" : "Không khớp"}
+                          </span>
+                        )
                       }
                     </td>
                     <td className="row-time">{new Date(r.created_at).toLocaleString("vi-VN")}</td>
