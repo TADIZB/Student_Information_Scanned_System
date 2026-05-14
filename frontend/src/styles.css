@@ -4,8 +4,8 @@
   color-scheme: light;
   --ink: #12141f;
   --muted: #5d657f;
-  --accent: #ff6f3c;
-  --accent-dark: #b33d1c;
+  --accent: #dc2626;
+  --accent-dark: #991b1b;
   --panel: rgba(255, 255, 255, 0.82);
   --shadow: 0 20px 60px rgba(15, 20, 44, 0.2);
   --radius: 22px;
@@ -19,7 +19,7 @@ body {
   margin: 0;
   font-family: "Space Grotesk", sans-serif;
   color: var(--ink);
-  background: radial-gradient(circle at top left, #fef6ec, #f2f0ff 55%, #f2fbf7);
+  background: radial-gradient(circle at top left, #fff5f5, #f2f0ff 55%, #fdf2f2);
   min-height: 100vh;
 }
 
@@ -27,8 +27,8 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background: linear-gradient(120deg, rgba(255, 111, 60, 0.18), transparent 55%),
-    radial-gradient(circle at 80% 20%, rgba(21, 170, 123, 0.18), transparent 50%);
+  background: linear-gradient(120deg, rgba(220, 38, 38, 0.18), transparent 55%),
+    radial-gradient(circle at 80% 20%, rgba(220, 38, 38, 0.08), transparent 50%);
   z-index: -1;
 }
 
@@ -44,6 +44,8 @@ body::before {
   align-items: center;
   gap: 24px;
   margin-bottom: 24px;
+  position: relative;
+  z-index: 10;
 }
 
 .brand {
@@ -55,7 +57,7 @@ body::before {
 .brand-mark {
   width: 48px;
   height: 48px;
-  background: conic-gradient(from 210deg, #ff6f3c, #ffb347, #36d2a5, #ff6f3c);
+  background: conic-gradient(from 210deg, #dc2626, #f87171, #991b1b, #dc2626);
   border-radius: 16px;
   box-shadow: var(--shadow);
 }
@@ -163,11 +165,11 @@ button {
 button.primary {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 12px 24px rgba(255, 111, 60, 0.3);
+  box-shadow: 0 12px 24px rgba(220, 38, 38, 0.3);
 }
 
 button.secondary {
-  background: rgba(255, 111, 60, 0.1);
+  background: rgba(220, 38, 38, 0.1);
   color: var(--accent);
   border: 1px solid var(--accent);
 }
@@ -252,7 +254,7 @@ button:disabled {
 }
 
 .banner.error {
-  background: rgba(255, 111, 60, 0.18);
+  background: rgba(220, 38, 38, 0.18);
   color: var(--accent-dark);
 }
 
@@ -264,4 +266,1024 @@ button:disabled {
   .layout {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Layout chính mới ──────────────────────────────────────────────────────── */
+
+.main-content {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.full-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* ── Tab navigation ────────────────────────────────────────────────────────── */
+
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  background: rgba(18, 20, 31, 0.07);
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.tab {
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.tab.active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 4px 12px rgba(18, 20, 31, 0.12);
+}
+
+.username-label {
+  font-size: 14px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  align-self: center;
+}
+
+/* ── Homepage ───────────────────────────────────────────────────────────────── */
+
+.home-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+.home-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 80px;
+}
+
+.home-auth-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.home-hero {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 72px;
+}
+
+.home-hero-badge {
+  display: inline-block;
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  border-radius: 999px;
+  margin-bottom: 20px;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.home-hero-title {
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0 0 20px;
+  letter-spacing: -0.02em;
+}
+
+.home-hero-accent {
+  background: linear-gradient(90deg, #dc2626, #f87171);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.home-hero-desc {
+  font-size: 17px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0 0 36px;
+}
+
+.home-hero-cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.home-cta-btn {
+  padding: 14px 28px;
+  font-size: 15px;
+}
+
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.feature-card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.feature-card-btn {
+  border-radius: var(--radius);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feature-card-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 28px 70px rgba(15, 20, 44, 0.22);
+}
+
+.feature-cta {
+  margin-top: 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.feature-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.feature-card h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.feature-card p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+/* ── Trang Login ────────────────────────────────────────────────────────────── */
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 40px 36px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-back {
+  padding: 6px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  color: var(--muted);
+}
+
+.login-brand {
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.login-subtitle {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 28px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.field input {
+  border: 1.5px solid rgba(18, 20, 31, 0.14);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-family: "Space Grotesk", sans-serif;
+  background: rgba(255,255,255,0.7);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+}
+
+.auth-tabs {
+  display: flex;
+  background: rgba(18, 20, 31, 0.07);
+  border-radius: 999px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+
+.auth-tab {
+  flex: 1;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 0;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.auth-tab.active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 4px 12px rgba(18, 20, 31, 0.12);
+}
+
+.login-success {
+  color: #0d9b73;
+  font-size: 13px;
+  background: rgba(54, 210, 165, 0.12);
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin: 0;
+}
+
+.login-error {
+  color: var(--accent-dark);
+  font-size: 13px;
+  background: rgba(220, 38, 38, 0.1);
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin: 0;
+}
+
+.full-width {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+}
+
+/* ── Scanner ────────────────────────────────────────────────────────────────── */
+
+.scanner-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 8px 0;
+}
+
+.webcam-wrapper {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #11131f;
+  aspect-ratio: 4 / 3;
+  max-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+  isolation: isolate;
+  z-index: 0;
+}
+
+.webcam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  position: absolute;  /* fill đúng wrapper khi dùng aspect-ratio */
+  inset: 0;
+}
+
+/* Khung căn chỉnh thẻ hình chữ nhật */
+.card-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 68%;
+  aspect-ratio: 85.6 / 54;
+  pointer-events: none;
+}
+
+.guide-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: rgba(255, 255, 255, 0.9);
+  border-style: solid;
+}
+
+.guide-corner.tl { top: 0; left: 0;  border-width: 3px 0 0 3px; border-radius: 3px 0 0 0; }
+.guide-corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 3px 0 0; }
+.guide-corner.bl { bottom: 0; left: 0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 3px; }
+.guide-corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 3px 0; }
+
+.guide-label {
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.7);
+  font-size: 11px;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(18, 20, 31, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.scan-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── QR laser sweep ──────────────────────────────────────────────────────── */
+.qr-laser {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 60, 60, 0.15) 15%,
+    rgba(255, 60, 60, 0.9) 50%,
+    rgba(255, 60, 60, 0.15) 85%,
+    transparent 100%
+  );
+  box-shadow: 0 0 6px 2px rgba(255, 60, 60, 0.5);
+  animation: laser-sweep 2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes laser-sweep {
+  0%   { top: 10%; }
+  50%  { top: 88%; }
+  100% { top: 10%; }
+}
+
+.auto-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.scanner-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button.active-btn {
+  background: var(--accent-dark);
+}
+
+/* Kết quả quét gần nhất */
+.scan-result-card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.scan-result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.scan-result-id {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.scan-result-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.warped-thumb {
+  width: 120px;
+  height: auto;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(18,20,31,0.1);
+}
+
+.student-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.student-avatar {
+  width: 72px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid rgba(18,20,31,0.12);
+  align-self: flex-start;
+  margin-bottom: 4px;
+}
+
+.avatar-preview {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid var(--accent, #5c6bc0);
+  vertical-align: middle;
+}
+
+.qr-raw {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* ── Match badge ────────────────────────────────────────── */
+.match-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.match-ok   { background: #dcfce7; color: #16a34a; }
+.match-fail { background: #fee2e2; color: #dc2626; }
+
+/* ── OCR Steps ──────────────────────────────────────────── */
+.ocr-steps {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+.ocr-steps-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ocr-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  transition: color 0.3s;
+}
+.step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.step-name {
+  flex: 1;
+  font-size: 13.5px;
+  transition: color 0.3s;
+}
+.step-badge {
+  font-size: 11px;
+  color: #fff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── Manual MSSV lookup ─────────────────────────────────── */
+.manual-lookup {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 24px 24px;
+  margin: 20px 0;
+}
+.manual-lookup-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #475569;
+  margin: 0 0 14px 0;
+}
+.manual-lookup-row {
+  display: flex;
+  gap: 10px;
+}
+.mssv-input-wrapper {
+  position: relative;
+  flex: 1;
+}
+/* Lớp hiển thị màu phía dưới input */
+.mssv-input-display {
+  position: absolute;
+  inset: 0;
+  padding: 12px 16px;
+  font-size: 18px;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  white-space: pre;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+}
+.mssv-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 18px;
+  outline: none;
+  transition: border-color 0.2s;
+  background: white;
+}
+/* Input trong suốt để chữ màu phía dưới hiển thị */
+.mssv-input-ghost {
+  position: relative;
+  color: transparent;
+  caret-color: #12141f;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: transparent;
+}
+.mssv-input-ghost::placeholder {
+  color: #9ca3af;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.mssv-input:focus { border-color: #dc2626; }
+.manual-lookup-row button.primary {
+  padding: 12px 22px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.lookup-error {
+  font-size: 13px;
+  color: #dc2626;
+  margin: 8px 0 0 0;
+}
+
+/* ── History section (trong Scanner) ────────────────────────────────────────── */
+
+.history-section {
+  margin-top: 32px;
+}
+
+.history-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
+.btn-export-small {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: "Space Grotesk", sans-serif;
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  text-decoration: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.btn-export-small:hover {
+  background: rgba(220, 38, 38, 0.22);
+}
+
+/* ── Dashboard ──────────────────────────────────────────────────────────────── */
+
+.dashboard-page {
+  padding: 8px 0;
+}
+
+.dashboard-page h2 {
+  margin: 0 0 20px;
+  font-size: 22px;
+}
+
+.table-wrapper {
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  overflow-x: auto;          /* cuộn ngang trên mobile */
+  -webkit-overflow-scrolling: touch;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  min-width: 480px;
+}
+
+.history-table th {
+  text-align: left;
+  padding: 14px 20px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 1.5px solid rgba(18,20,31,0.08);
+}
+
+.history-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.history-row:hover {
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.history-row td {
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(18,20,31,0.06);
+}
+
+.row-num {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  width: 40px;
+}
+
+.row-time {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+button.ghost.small {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* Badge loại quét */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.badge.qr     { background: rgba(220, 38, 38, 0.12); color: #991b1b; }
+.badge.ocr    { background: rgba(220, 38, 38, 0.18); color: var(--accent-dark); }
+.badge.lookup { background: rgba(37, 99, 235, 0.12); color: #1d4ed8; }
+
+/* ── Modal ──────────────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 15, 30, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 32px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(18,20,31,0.07);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-header h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.modal-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-image {
+  width: 100%;
+  border-radius: 14px;
+  border: 1.5px solid rgba(18,20,31,0.1);
+  object-fit: contain;
+  max-height: 200px;
+}
+
+/* Grid thông tin */
+.info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(18,20,31,0.04);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.info-row span {
+  color: var(--muted);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.info-row strong {
+  text-align: right;
+  word-break: break-word;
+}
+
+/* Raw data */
+.raw-section {
+  background: rgba(18,20,31,0.05);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.raw-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.raw-pre {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  word-break: break-all;
+  white-space: pre-wrap;
+  color: var(--ink);
+}
+
+/* Nút export */
+.btn-export {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  padding: 13px 20px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-export:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(220, 38, 38, 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE  (≤ 640px)
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── App shell ── */
+  .app {
+    padding: 16px 14px 40px;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .brand h1 { font-size: 22px; }
+  .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
+
+  .tab-nav {
+    order: 3;           /* xuống hàng dưới brand + actions */
+    width: 100%;
+    justify-content: stretch;
+  }
+  .tab-nav .tab {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    padding: 8px 6px;
+  }
+
+  .actions { gap: 8px; }
+  .actions button { padding: 8px 14px; font-size: 13px; }
+  .username-label { font-size: 13px; }
+
+  /* ── Scanner page ── */
+  .scanner-page { gap: 14px; }
+
+  .webcam-wrapper {
+    border-radius: 14px;
+    max-height: none;        /* để aspect-ratio tự tính chiều cao */
+    width: 100%;
+  }
+
+  /* ── Controls ── */
+  .scanner-controls {
+    flex-direction: row;
+    gap: 8px;
+  }
+  .scanner-controls button {
+    flex: 1;
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+
+  /* ── Manual lookup ── */
+  .manual-lookup {
+    padding: 16px 14px;
+    border-radius: 12px;
+    margin: 8px 0;
+  }
+  .manual-lookup-label { font-size: 14px; margin-bottom: 10px; }
+
+  .mssv-input-display,
+  .mssv-input {
+    font-size: 15px;
+    padding: 10px 12px;
+  }
+  .mssv-input-display { padding: 10px 12px; }
+  .manual-lookup-row button.primary {
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  /* ── Kết quả quét ── */
+  .scan-result-card { padding: 14px; border-radius: 16px; }
+
+  .scan-result-body {
+    flex-direction: column;  /* ảnh warp + thông tin xếp dọc */
+    gap: 10px;
+  }
+  .warped-thumb {
+    width: 100%;
+    max-height: 180px;
+    object-fit: contain;
+  }
+
+  /* ── Thông tin sinh viên ── */
+  .student-info { gap: 4px; }
+  .info-row {
+    font-size: 13px;
+    gap: 6px;
+  }
+  .info-row span { font-size: 12px; }
+
+  /* ── Lịch sử quét ── */
+  .history-section { margin-top: 20px; }
+  .history-section-title { font-size: 16px; }
+  .history-table { font-size: 13px; }
+  .history-table th,
+  .history-row td  { padding: 10px 12px; }
+
+  /* ── Modal chi tiết ── */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-card {
+    max-width: 100%;
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 24px 24px 0 0;   /* bottom sheet style */
+    padding: 20px 16px 32px;
+  }
+
+  /* ── OCR Steps ── */
+  .ocr-steps { padding: 12px 14px; }
+  .step-name { font-size: 13px; }
 }

@@ -6,3 +6,9 @@ opencv-python==4.10.0.84
 numpy==1.26.4
 pytesseract==0.3.10
 reportlab==4.2.2
+# ── Thêm mới ──────────────────────────
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+bcrypt==4.0.1
+pyzbar==0.1.9
+python-dotenv==1.0.1
