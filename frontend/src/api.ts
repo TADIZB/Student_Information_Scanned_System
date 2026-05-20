@@ -40,6 +40,14 @@ export interface ScanStep {
   image_url?: string | null;   // data URL minh hoạ kết quả của bước
 }
 
+export interface ExtractedInfo {
+  full_name: string | null;
+  birth_date: string | null;
+  school: string | null;
+  student_id: string | null;
+  email: string | null;
+}
+
 export interface ScanResult {
   scan_id: string;
   scan_type: "qr" | "ocr";
@@ -49,6 +57,8 @@ export interface ScanResult {
   warped_image_url: string;
   steps: ScanStep[];
   blocks: BlockData[];
+  raw_text: string | null;
+  extracted_info: ExtractedInfo | null;
 }
 
 export interface ScanRecord {

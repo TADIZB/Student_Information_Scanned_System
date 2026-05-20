@@ -30,6 +30,7 @@ from .pipeline import (
     img_to_data_url,
     layout_and_ocr,
     load_image,
+    ocr_ensemble,
     ocr_preprocessed,
     pil_to_cv,
     preprocess_for_ocr,
@@ -69,6 +70,73 @@ def _warped_to_png_bytes(warped_image: np.ndarray) -> bytes:
 
 def _to_data_url(image_bytes: bytes, mime: str = "image/png") -> str:
     return f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
+
+
+def _strip_diacritics(s: str) -> str:
+    """Bỏ dấu để so sánh fuzzy (Nguyễn → Nguyen, Đức → Duc)."""
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", s or "")
+    cleaned = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return cleaned.replace("đ", "d").replace("Đ", "D")
+
+
+def _match_student(
+    db: DBSession,
+    mssv_candidates: list[str],
+    extracted_name: str | None,
+) -> tuple[Student | None, str]:
+    """
+    Tra cứu sinh viên theo nhiều chiến lược:
+    1. MSSV exact (thử từng candidate đã sửa OCR confusion)
+    2. Fuzzy tên có dấu (token_set_ratio >= 82)
+    3. Fuzzy tên BỎ DẤU (token_set_ratio >= 88) — bắt ca OCR mất dấu
+
+    Returns: (student, strategy_note)
+    """
+    # Strategy 1: MSSV exact
+    for mssv in mssv_candidates:
+        st = db.query(Student).filter(Student.student_id == mssv).first()
+        if st:
+            return st, f"khớp MSSV '{mssv}'"
+
+    # Strategy 2 + 3: Fuzzy name match (case-insensitive)
+    if extracted_name and extracted_name.strip():
+        try:
+            from rapidfuzz import fuzz
+            students = db.query(Student).filter(Student.full_name.isnot(None)).all()
+            name_lc = extracted_name.lower().strip()
+            name_stripped_lc = _strip_diacritics(extracted_name).lower().strip()
+
+            best_st: Student | None = None
+            best_score = 0
+            best_strategy = ""
+
+            for s in students:
+                if not s.full_name:
+                    continue
+                db_lc = s.full_name.lower().strip()
+                db_stripped_lc = _strip_diacritics(s.full_name).lower().strip()
+                # 2a. So với dấu (lowercase)
+                sc_dia = fuzz.token_set_ratio(name_lc, db_lc)
+                # 2b. So không dấu (cao hơn vì OCR hay mất dấu)
+                sc_strip = fuzz.token_set_ratio(name_stripped_lc, db_stripped_lc)
+
+                # Ưu tiên: có dấu cao → tin cậy hơn không dấu cao
+                if sc_dia >= 82 and sc_dia > best_score:
+                    best_score = sc_dia
+                    best_st = s
+                    best_strategy = f"fuzzy có dấu ({sc_dia}%)"
+                elif sc_strip >= 88 and sc_strip > best_score and sc_dia < 82:
+                    best_score = sc_strip
+                    best_st = s
+                    best_strategy = f"fuzzy không dấu ({sc_strip}%)"
+
+            if best_st:
+                return best_st, f"{best_strategy}: '{extracted_name}' → '{best_st.full_name}'"
+        except ImportError:
+            pass
+
+    return None, ""
 
 
 def _student_to_dict(s: Student, scan_id: str | None = None) -> dict:
@@ -297,6 +365,8 @@ async def process_scan(
                     "warped_image_url": None,
                     "steps": [],
                     "blocks": [],
+                    "raw_text": None,
+                    "extracted_info": None,
                 }
 
             parsed = _parse_qr_mssv(qr_data)
@@ -345,6 +415,8 @@ async def process_scan(
                 "warped_image_url": _to_data_url(warped_bytes),
                 "steps": [],
                 "blocks": [],
+                "raw_text": None,
+                "extracted_info": None,
             }
 
         # ════════════════════════════════════════════════════════════════════
@@ -427,10 +499,10 @@ async def process_scan(
             steps.append({"name": "5. Tăng cường ảnh cho OCR", "status": "fail", "description": "Lỗi khi tiền xử lý ảnh.", "image_url": None})
             raise HTTPException(status_code=422, detail="Lỗi tiền xử lý ảnh.")
 
-        # Bước 6: OCR — vẽ bounding box của từng dòng lên ảnh tiền xử lý
+        # Bước 6: OCR ensemble — chạy Tesseract trên nhiều variant × PSM
         try:
-            blocks = ocr_preprocessed(preprocessed)
-            raw_text = " ".join(
+            blocks = ocr_ensemble(warped.image)
+            raw_text = "\n".join(
                 line["text"] for block in blocks for line in block.get("lines", [])
             ).strip()
             num_lines = sum(len(b.get("lines", [])) for b in blocks)
@@ -440,11 +512,12 @@ async def process_scan(
             )
             ocr_overlay = draw_ocr_blocks_on_image(preprocessed, blocks)
             steps.append({
-                "name": "6. Nhận dạng văn bản (Tesseract OCR)",
+                "name": "6. Nhận dạng văn bản (Tesseract OCR ensemble)",
                 "status": "success" if raw_text else "warning",
                 "description": (
-                    f"Tesseract phát hiện {num_lines} dòng văn bản (độ tin cậy trung bình {avg_conf:.1f}%). "
-                    f"Các khung đỏ là vùng chữ tìm được."
+                    f"Chạy OCR trên 4 biến thể ảnh × 3 chế độ PSM, gộp dòng theo IoU. "
+                    f"Tổng {num_lines} dòng (độ tin cậy trung bình {avg_conf:.1f}%). "
+                    f"Các khung đỏ là vùng chữ giữ lại."
                     if raw_text else "Không nhận dạng được dòng chữ nào."
                 ),
                 "image_url": img_to_data_url(ocr_overlay),
@@ -456,16 +529,23 @@ async def process_scan(
             raise HTTPException(status_code=422, detail="Lỗi khi nhận dạng văn bản.")
 
         # Bước 7: Bóc tách & đối chiếu dữ liệu sinh viên
-        ocr_info = extract_student_info(raw_text)
-        mssv = ocr_info.get("student_id")
-        student = db.query(Student).filter(Student.student_id == mssv).first() if mssv else None
+        ocr_info = extract_student_info(
+            raw_text,
+            blocks=blocks,
+            image_height=warped.image.shape[0],
+        )
+        mssv_cands = ocr_info.get("student_id_candidates") or []
+        # Loại key nội bộ trước khi trả về frontend
+        ocr_info_public = {k: v for k, v in ocr_info.items() if k != "student_id_candidates"}
+
+        student, match_note = _match_student(db, mssv_cands, ocr_info.get("full_name"))
 
         extracted_summary = " · ".join(
             f"{k}: {v}" for k, v in [
-                ("MSSV", ocr_info.get("student_id")),
-                ("Họ tên", ocr_info.get("full_name")),
-                ("Ngày sinh", ocr_info.get("birth_date")),
-                ("Email", ocr_info.get("email")),
+                ("MSSV", ocr_info_public.get("student_id")),
+                ("Họ tên", ocr_info_public.get("full_name")),
+                ("Ngày sinh", ocr_info_public.get("birth_date")),
+                ("Email", ocr_info_public.get("email")),
             ] if v
         ) or "Không bóc được trường nào."
 
@@ -475,16 +555,17 @@ async def process_scan(
             steps.append({
                 "name": "7. Bóc tách & đối chiếu dữ liệu sinh viên",
                 "status": "success",
-                "description": f"Bóc được: {extracted_summary}. → Khớp MSSV {mssv} trong CSDL.",
+                "description": f"Bóc được: {extracted_summary}. → {match_note}.",
                 "image_url": None,
             })
         else:
             match_result = 0
-            student_info = {**ocr_info, "avatar_url": avatar_data_url}
+            student_info = {**ocr_info_public, "avatar_url": avatar_data_url}
+            cand_note = f" Đã thử các MSSV: {', '.join(mssv_cands[:5])}." if mssv_cands else ""
             steps.append({
                 "name": "7. Bóc tách & đối chiếu dữ liệu sinh viên",
                 "status": "fail",
-                "description": f"Bóc được: {extracted_summary}. → Không khớp với sinh viên nào trong CSDL.",
+                "description": f"Bóc được: {extracted_summary}.{cand_note} → Không khớp sinh viên nào.",
                 "image_url": None,
             })
 
@@ -525,6 +606,8 @@ async def process_scan(
             "warped_image_url": _to_data_url(warped_bytes),
             "steps": steps,
             "blocks": blocks,
+            "raw_text": raw_text,
+            "extracted_info": ocr_info_public,
         }
 
     except HTTPException:

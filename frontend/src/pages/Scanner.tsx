@@ -50,6 +50,8 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
+  // Ảnh đang phân tích (snapshot từ cam hoặc file upload) — hiển thị thay cho cam khi busy
+  const [analyzingPreview, setAnalyzingPreview] = useState<string | null>(null);
 
   // ── MSSV nhập tay (chỉ QR) ────────────────────────────────────────────────
   const [manualMssv, setManualMssv] = useState("");
@@ -87,6 +89,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     setLookupResult(null);
     setLookupError("");
     setManualMssv("");
+    setAnalyzingPreview(null);
   }, [scanMode]);
 
   const openDetail = async (id: string) => {
@@ -125,6 +128,14 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
       setBusy(true);
       setError("");
       setVisibleSteps([]);
+      // OCR: lưu snapshot để hiển thị thay cho cam trong lúc phân tích
+      let previewObjectUrl: string | null = null;
+      if (scanMode === "ocr") {
+        try {
+          previewObjectUrl = URL.createObjectURL(blob);
+          setAnalyzingPreview(previewObjectUrl);
+        } catch { /* ignore */ }
+      }
       try {
         const result = await processScan(blob, scanMode);
 
@@ -148,6 +159,8 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         setError(detail || "Quét thất bại. Vui lòng thử lại hoặc điều chỉnh góc chụp.");
       } finally {
         setBusy(false);
+        setAnalyzingPreview(null);
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,15 +252,24 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
       {/* ── Khung camera ───────────────────────────────────────────────────── */}
       <div className="webcam-wrapper">
-        <Webcam
-          ref={webcamRef}
-          audio={false}
-          screenshotFormat="image/jpeg"
-          screenshotQuality={0.92}
-          videoConstraints={{ facingMode: "environment" }}
-          className="webcam-video"
-          onUserMediaError={() => setError("Không thể mở camera. Hãy cấp quyền truy cập.")}
-        />
+        {busy && scanMode === "ocr" ? (
+          // Đang phân tích OCR: tắt cam, hiện ảnh đang xử lý
+          analyzingPreview ? (
+            <img src={analyzingPreview} alt="Đang phân tích" className="webcam-video" />
+          ) : (
+            <div className="webcam-video" />
+          )
+        ) : (
+          <Webcam
+            ref={webcamRef}
+            audio={false}
+            screenshotFormat="image/jpeg"
+            screenshotQuality={0.92}
+            videoConstraints={{ facingMode: "environment" }}
+            className="webcam-video"
+            onUserMediaError={() => setError("Không thể mở camera. Hãy cấp quyền truy cập.")}
+          />
+        )}
         <div className="card-guide">
           <span className="guide-corner tl" /><span className="guide-corner tr" />
           <span className="guide-corner bl" /><span className="guide-corner br" />
@@ -389,6 +411,35 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
               <pre className="raw-pre">{lastResult.qr_data}</pre>
             </div>
           )}
+          {lastResult.scan_type === "ocr" && (lastResult.raw_text || lastResult.extracted_info) && (
+            <div className="raw-section">
+              <p className="raw-label">Kết quả phân tích OCR</p>
+              {lastResult.extracted_info && (
+                <div className="ocr-extracted">
+                  {([
+                    ["Họ tên", lastResult.extracted_info.full_name],
+                    ["MSSV", lastResult.extracted_info.student_id],
+                    ["Ngày sinh", lastResult.extracted_info.birth_date],
+                    ["Trường, Viện", lastResult.extracted_info.school],
+                    ["Email", lastResult.extracted_info.email],
+                  ] as [string, string | null][])
+                    .filter(([, v]) => v)
+                    .map(([label, value]) => (
+                      <div className="info-row" key={label}>
+                        <span>{label}</span>
+                        <strong>{value}</strong>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {lastResult.raw_text && (
+                <>
+                  <p className="raw-label" style={{ marginTop: 10 }}>Văn bản OCR thô</p>
+                  <pre className="raw-pre">{lastResult.raw_text}</pre>
+                </>
+              )}
+            </div>
+          )}
           <div style={{ marginTop: 14 }}>
             <a
               href={getExportCardUrl(lastResult.scan_id)}
@@ -490,6 +541,12 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                   <div className="raw-section">
                     <p className="raw-label">QR Raw Data</p>
                     <pre className="raw-pre">{selected.qr_data}</pre>
+                  </div>
+                )}
+                {selected.scan_type === "ocr" && selected.raw_text && (
+                  <div className="raw-section">
+                    <p className="raw-label">Kết quả phân tích OCR</p>
+                    <pre className="raw-pre">{selected.raw_text}</pre>
                   </div>
                 )}
                 <a

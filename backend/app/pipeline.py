@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
@@ -117,27 +118,113 @@ def order_points(points: np.ndarray) -> np.ndarray:
     return rect
 
 
+def _aspect_ratio_ok(quad: np.ndarray) -> bool:
+    """Kiểm tra tỉ lệ cạnh có hợp lý với thẻ sinh viên không (~1.4 : 1, cho phép 1.0..2.5)."""
+    rect = order_points(quad.astype("float32"))
+    (tl, tr, br, bl) = rect
+    w = (np.linalg.norm(tr - tl) + np.linalg.norm(br - bl)) / 2
+    h = (np.linalg.norm(bl - tl) + np.linalg.norm(br - tr)) / 2
+    if min(w, h) < 1: return False
+    ratio = max(w, h) / min(w, h)
+    return 1.0 <= ratio <= 2.5
+
+
 def find_document_contour(image: np.ndarray) -> np.ndarray | None:
+    """
+    Phát hiện tứ giác tài liệu robust hơn:
+    - Thử nhiều cặp ngưỡng Canny (tự động + tay)
+    - Lọc theo aspect ratio (tránh nhặt nhầm khung dài)
+    - Fallback minAreaRect khi approxPolyDP không ra 4 cạnh
+    - min_area nới xuống 2% để chụp xa vẫn bắt được
+    """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edged = cv2.Canny(blurred, 50, 150)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    closed = cv2.morphologyEx(edged, cv2.MORPH_CLOSE, kernel, iterations=2)
-    contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     h, w = image.shape[:2]
-    min_area = (h * w) * 0.05
-    max_area = (h * w) * 0.95
-    contours = [c for c in contours if min_area < cv2.contourArea(c) < max_area]
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
-    for contour in contours:
-        peri = cv2.arcLength(contour, True)
-        for tolerance in [0.01, 0.015, 0.02, 0.025, 0.03]:
-            approx = cv2.approxPolyDP(contour, tolerance * peri, True)
-            if len(approx) == 4:
-                area = cv2.contourArea(approx)
-                if min_area < area < max_area:
-                    return approx.reshape(4, 2)
-    return None
+    min_area = (h * w) * 0.02
+    max_area = (h * w) * 0.97
+
+    # Tự động chọn ngưỡng Canny dựa trên median (Otsu's heuristic)
+    median = float(np.median(blurred))
+    auto_lo = int(max(0, 0.66 * median))
+    auto_hi = int(min(255, 1.33 * median))
+
+    threshold_sets = [
+        (auto_lo, auto_hi),
+        (50, 150),
+        (30, 100),
+        (75, 200),
+    ]
+
+    best_quad: np.ndarray | None = None
+    best_area = 0.0
+
+    for lo, hi in threshold_sets:
+        edged = cv2.Canny(blurred, lo, hi)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        closed = cv2.morphologyEx(edged, cv2.MORPH_CLOSE, kernel, iterations=2)
+        contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        contours = [c for c in contours if min_area < cv2.contourArea(c) < max_area]
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
+
+        for contour in contours:
+            peri = cv2.arcLength(contour, True)
+            for tol in (0.01, 0.015, 0.02, 0.025, 0.03, 0.04):
+                approx = cv2.approxPolyDP(contour, tol * peri, True)
+                if len(approx) == 4:
+                    quad = approx.reshape(4, 2)
+                    area = cv2.contourArea(approx)
+                    if min_area < area < max_area and _aspect_ratio_ok(quad) and area > best_area:
+                        best_quad = quad
+                        best_area = area
+                        break
+            # Fallback minAreaRect cho contour lớn nhất nếu không ra 4 cạnh
+            if best_quad is None and cv2.contourArea(contour) > min_area * 2:
+                rect = cv2.minAreaRect(contour)
+                box = cv2.boxPoints(rect).astype(np.int32)
+                if _aspect_ratio_ok(box):
+                    area = cv2.contourArea(box)
+                    if area > best_area:
+                        best_quad = box
+                        best_area = area
+
+        if best_quad is not None:
+            break  # đã tìm thấy với set ngưỡng đầu tiên tốt
+
+    return best_quad
+
+
+def _deskew(image: np.ndarray, max_angle: float = 15.0) -> np.ndarray:
+    """
+    Phát hiện góc nghiêng qua HoughLinesP rồi xoay bù.
+    Chỉ xử lý góc nghiêng nhỏ (|angle| < max_angle) để tránh xoay nhầm.
+    """
+    if image is None or image.size == 0:
+        return image
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+    lines = cv2.HoughLinesP(
+        edges, 1, np.pi / 180, threshold=100,
+        minLineLength=min(gray.shape) // 3, maxLineGap=20,
+    )
+    if lines is None:
+        return image
+    angles = []
+    for x1, y1, x2, y2 in lines[:, 0]:
+        a = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+        # Chỉ giữ line gần ngang
+        if abs(a) < max_angle:
+            angles.append(a)
+    if not angles:
+        return image
+    angle = float(np.median(angles))
+    if abs(angle) < 0.3:
+        return image
+    h, w = image.shape[:2]
+    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
+    return cv2.warpAffine(
+        image, M, (w, h),
+        flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE,
+    )
 
 
 def warp_perspective(image: np.ndarray) -> WarpResult:
@@ -145,7 +232,8 @@ def warp_perspective(image: np.ndarray) -> WarpResult:
     if contour is None:
         h, w = image.shape[:2]
         quad = [[0, 0], [w, 0], [w, h], [0, h]]
-        return WarpResult(image=image, quad=quad, used_warp=False)
+        # Không có quad → vẫn cố gắng deskew để OCR đỡ gãy dòng
+        return WarpResult(image=_deskew(image), quad=quad, used_warp=False)
     rect = order_points(contour.astype("float32"))
     (tl, tr, br, bl) = rect
     width_a = np.linalg.norm(br - bl)
@@ -160,6 +248,7 @@ def warp_perspective(image: np.ndarray) -> WarpResult:
     )
     matrix = cv2.getPerspectiveTransform(rect, dst)
     warped = cv2.warpPerspective(image, matrix, (max_width, max_height))
+    warped = _deskew(warped)
     quad = rect.astype(int).tolist()
     return WarpResult(image=warped, quad=quad, used_warp=True)
 
@@ -169,58 +258,80 @@ def warp_perspective(image: np.ndarray) -> WarpResult:
 def preprocess_for_qr(image: np.ndarray) -> List[np.ndarray]:
     """
     Trả về danh sách các biến thể ảnh để tăng tỷ lệ nhận diện QR.
-    pyzbar sẽ thử lần lượt đến khi tìm được QR.
+    pyzbar tự xử lý xoay nên chỉ cần tập trung vào tương phản + scale.
     """
-    variants: List[np.ndarray] = [image]  # Thử ảnh gốc trước
-
-    # Tăng độ tương phản bằng CLAHE trên kênh grayscale
+    variants: List[np.ndarray] = [image]
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # CLAHE
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
     variants.append(cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR))
 
-    # Adaptive threshold (nhị phân hóa cục bộ)
+    # Otsu binary (rõ ràng hơn adaptive với QR đơn sắc)
+    _, otsu = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    variants.append(cv2.cvtColor(otsu, cv2.COLOR_GRAY2BGR))
+
+    # Adaptive — fallback cho ánh sáng không đều
     thresh = cv2.adaptiveThreshold(
         gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
     )
     variants.append(cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR))
 
-    # Xoay 90°, 180°, 270° — QR lệch góc vẫn nhận được
-    for angle in (90, 180, 270):
-        center = (image.shape[1] // 2, image.shape[0] // 2)
-        rot_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-        rotated = cv2.warpAffine(image, rot_matrix, (image.shape[1], image.shape[0]))
-        variants.append(rotated)
+    # Upscale 2x cho QR nhỏ (chụp xa)
+    h, w = image.shape[:2]
+    if max(h, w) < 1500:
+        up = cv2.resize(image, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+        variants.append(up)
+
+    # Sharpen cho QR nhòe do rung tay
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    variants.append(cv2.filter2D(image, -1, kernel))
 
     return variants
 
 
-def preprocess_for_ocr(image: np.ndarray) -> np.ndarray:
+def preprocess_variants_for_ocr(image: np.ndarray) -> Tuple[List[Tuple[str, np.ndarray]], float]:
     """
-    Xử lý ảnh để tối ưu cho Tesseract OCR:
-    grayscale → CLAHE → adaptive threshold → denoise.
-    """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    Trả về (variants, scale).
+    - variants: list các biến thể preprocess (đã upscale)
+    - scale: tỉ lệ upscale so với input. Bbox OCR cần chia cho scale để về không gian gốc.
 
-    # Phóng to nếu ảnh quá nhỏ (Tesseract cần ít nhất ~150 DPI)
+    Bỏ bilateral (gây noise cho Tesseract khi không binarize).
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
+
+    # Upscale lên ~1500px (Tesseract thích ~300 DPI cho thẻ kích thước thực)
     h, w = gray.shape
-    if max(h, w) < 800:
-        scale = 800 / max(h, w)
+    scale = 1.0
+    if max(h, w) < 1500:
+        scale = 1500 / max(h, w)
         gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
 
-    # CLAHE tăng độ tương phản đều
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    gray = clahe.apply(gray)
+    enhanced = clahe.apply(gray)
 
-    # Adaptive threshold: chuyển về ảnh đen trắng, giảm noise nền
-    binary = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 8
-    )
+    variants: List[Tuple[str, np.ndarray]] = [
+        # 1. Grayscale + CLAHE — giữ nguyên dấu, để Tesseract tự thresh
+        ("clahe", enhanced),
+        # 2. Otsu binary — tốt khi nền đồng đều
+        ("otsu", cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
+        # 3. Adaptive với block lớn — giữ dấu tốt hơn block nhỏ
+        ("adaptive", cv2.adaptiveThreshold(
+            enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 25, 10,
+        )),
+    ]
+    return variants, scale
 
-    # Denoise nhẹ để bỏ chấm nhiễu nhỏ
-    denoised = cv2.medianBlur(binary, 3)
 
-    return denoised
+def preprocess_for_ocr(image: np.ndarray) -> np.ndarray:
+    """Backward-compat: trả về biến thể adaptive (dùng cho overlay/preview)."""
+    variants, _ = preprocess_variants_for_ocr(image)
+    for name, img in variants:
+        if name == "adaptive":
+            return img
+    return variants[0][1]
 
 
 # ─── QR Detection ────────────────────────────────────────────────────────────
@@ -246,22 +357,32 @@ def detect_qr(image: np.ndarray) -> str | None:
 
 # ─── OCR ─────────────────────────────────────────────────────────────────────
 
-def _group_words_into_lines(data: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+def _group_words_into_lines(data: Dict[str, List[str]], min_word_conf: float = 30.0) -> List[Dict[str, Any]]:
+    """
+    Gộp các word của Tesseract thành dòng.
+    - Lọc word có conf < min_word_conf (giảm rác)
+    - Confidence dòng = trung bình có trọng số theo độ dài word (thay vì min).
+    """
     lines: Dict[Tuple[str, str], Dict[str, Any]] = {}
     for i, text in enumerate(data["text"]):
-        if not text.strip():
+        text = text.strip()
+        if not text:
+            continue
+        conf = float(data["conf"][i]) if str(data["conf"][i]) != "-1" else 0.0
+        if conf < min_word_conf:
             continue
         line_key = (data["block_num"][i], data["line_num"][i])
         left = int(data["left"][i])
         top = int(data["top"][i])
         width = int(data["width"][i])
         height = int(data["height"][i])
-        conf = float(data["conf"][i]) if data["conf"][i] != "-1" else 0.0
         if line_key not in lines:
             lines[line_key] = {
                 "text": text,
                 "bbox": [left, top, left + width, top + height],
-                "conf": conf,
+                # weighted conf accumulator: (Σ conf*len, Σ len)
+                "_conf_sum": conf * len(text),
+                "_len_sum": len(text),
             }
         else:
             line = lines[line_key]
@@ -273,89 +394,444 @@ def _group_words_into_lines(data: Dict[str, List[str]]) -> List[Dict[str, Any]]:
                 max(x2, left + width),
                 max(y2, top + height),
             ]
-            line["conf"] = min(line["conf"], conf)
-    return list(lines.values())
+            line["_conf_sum"] += conf * len(text)
+            line["_len_sum"] += len(text)
+
+    out: List[Dict[str, Any]] = []
+    for line in lines.values():
+        conf = line["_conf_sum"] / line["_len_sum"] if line["_len_sum"] else 0.0
+        out.append({"text": line["text"], "bbox": line["bbox"], "conf": conf})
+    return out
 
 
-def _best_tesseract_lang() -> str:
-    """Ưu tiên tiếng Việt nếu được cài, fallback sang eng."""
+def _best_tesseract_lang(prefer_vie_only: bool = True) -> str:
+    """
+    Lang detection:
+    - prefer_vie_only=True: 'vie' thuần (giữ dấu tốt nhất cho thẻ SV Việt)
+    - fallback: 'vie+eng' rồi 'eng'
+
+    Lý do: 'vie+eng' khiến Tesseract đôi khi chọn token ASCII vì
+    eng dictionary có likelihood cao hơn → mất dấu tiếng Việt.
+    """
     try:
         langs = pytesseract.get_languages()
         if "vie" in langs:
-            return "vie+eng"
+            return "vie" if prefer_vie_only else "vie+eng"
     except Exception:
         pass
     return "eng"
 
 
+def _bbox_iou(a: List[int], b: List[int]) -> float:
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    inter_x1, inter_y1 = max(ax1, bx1), max(ay1, by1)
+    inter_x2, inter_y2 = min(ax2, bx2), min(ay2, by2)
+    iw, ih = max(0, inter_x2 - inter_x1), max(0, inter_y2 - inter_y1)
+    inter = iw * ih
+    if inter == 0:
+        return 0.0
+    area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
+    area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
+    union = area_a + area_b - inter
+    return inter / union if union else 0.0
+
+
+def _dedupe_lines(lines: List[Dict[str, Any]], iou_thresh: float = 0.4) -> List[Dict[str, Any]]:
+    """
+    Khi chạy ensemble (nhiều variant × PSM), nhiều dòng cùng vị trí sẽ trùng.
+    Giữ dòng có conf cao nhất trong mỗi cụm bbox chồng lấn.
+    """
+    sorted_lines = sorted(lines, key=lambda l: l["conf"], reverse=True)
+    kept: List[Dict[str, Any]] = []
+    for line in sorted_lines:
+        if any(_bbox_iou(line["bbox"], k["bbox"]) > iou_thresh for k in kept):
+            continue
+        kept.append(line)
+    # Sort cuối cùng theo y rồi x cho hiển thị
+    kept.sort(key=lambda l: (l["bbox"][1], l["bbox"][0]))
+    return kept
+
+
 def ocr_preprocessed(preprocessed: np.ndarray) -> List[Dict[str, Any]]:
-    """Chạy Tesseract trên ảnh đã tiền xử lý sẵn. bbox trả về thuộc không gian ảnh tiền xử lý."""
+    """
+    Backward-compat: chạy 1 lần OCR trên ảnh đã preprocess.
+    Sử dụng PSM 6 + ngưỡng word conf 30%.
+    """
     lang = _best_tesseract_lang()
-    config = "--psm 6 --oem 3"
     data = pytesseract.image_to_data(
         preprocessed,
         lang=lang,
-        config=config,
+        config="--psm 6 --oem 3",
         output_type=pytesseract.Output.DICT,
     )
-
     lines = _group_words_into_lines(data)
-    blocks: List[Dict[str, Any]] = []
-    for line in lines:
-        if line["conf"] < 5:
-            continue
-        blocks.append(
-            {
-                "type": "text",
-                "bbox": line["bbox"],
-                "lines": [line],
-                "confidence": line["conf"],
-            }
-        )
-    return blocks
+    return [
+        {"type": "text", "bbox": l["bbox"], "lines": [l], "confidence": l["conf"]}
+        for l in lines if l["conf"] >= 30
+    ]
+
+
+def _rescale_bbox(bbox: List[int], inv_scale: float) -> List[int]:
+    return [int(round(v * inv_scale)) for v in bbox]
+
+
+def ocr_ensemble(image: np.ndarray, psms: Tuple[int, ...] = (6, 4)) -> List[Dict[str, Any]]:
+    """
+    Chạy Tesseract trên (variant × PSM), gộp dòng theo confidence cao nhất.
+    Bbox trả về thuộc không gian `image` đầu vào (đã rescale từ không gian upscaled).
+
+    PSMs mặc định: 6 (uniform block) + 4 (single column). Bỏ PSM 11 (sparse text)
+    vì gây nhiều dòng rác làm hỏng dedupe.
+    """
+    lang = _best_tesseract_lang(prefer_vie_only=True)
+    variants, scale = preprocess_variants_for_ocr(image)
+    inv_scale = 1.0 / scale if scale else 1.0
+
+    all_lines: List[Dict[str, Any]] = []
+    for variant_name, variant_img in variants:
+        for psm in psms:
+            try:
+                data = pytesseract.image_to_data(
+                    variant_img,
+                    lang=lang,
+                    config=f"--psm {psm} --oem 3",
+                    output_type=pytesseract.Output.DICT,
+                )
+                lines = _group_words_into_lines(data)
+                # Rescale bbox về không gian input
+                for line in lines:
+                    line["bbox"] = _rescale_bbox(line["bbox"], inv_scale)
+                all_lines.extend(lines)
+            except Exception:
+                continue
+
+    deduped = _dedupe_lines(all_lines)
+    return [
+        {"type": "text", "bbox": l["bbox"], "lines": [l], "confidence": l["conf"]}
+        for l in deduped
+    ]
 
 
 def layout_and_ocr(image: np.ndarray) -> List[Dict[str, Any]]:
-    """Wrapper tiện dụng: tự preprocess rồi OCR (giữ tương thích code cũ)."""
-    return ocr_preprocessed(preprocess_for_ocr(image))
+    """Wrapper: dùng ensemble OCR (nhiều variant × PSM) để có kết quả tốt nhất."""
+    return ocr_ensemble(image)
 
 
 # ─── Extract student info từ OCR text ────────────────────────────────────────
 
-def extract_student_info(raw_text: str) -> dict:
-    """
-    Bóc tách thông tin sinh viên từ raw OCR text bằng regex.
-    Hỗ trợ cả chữ hoa/thường và dấu tiếng Việt.
-    """
-    import re
+# ─── Vietnamese name patterns ────────────────────────────────────────────────
 
-    # Mã sinh viên: 7-10 chữ số, có thể có tiền tố 1-3 chữ cái (vd: SV12345678)
-    student_id_match = re.search(r'\b([A-Z]{0,3}\d{7,10})\b', raw_text, re.IGNORECASE)
+_VN_SURNAMES = {
+    "Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Huỳnh", "Phan", "Vũ", "Võ",
+    "Đặng", "Bùi", "Đỗ", "Hồ", "Ngô", "Dương", "Lý", "Đào", "Đoàn", "Trịnh",
+    "Đinh", "Mai", "Cao", "Tô", "Tạ", "Hà", "Lương", "Đậu", "Trương", "Lâm",
+    "Châu", "Quách", "Tăng", "Thái", "Khúc", "Kim", "Lưu", "La", "Chu", "Bạch",
+}
 
-    # Họ tên: tìm sau nhãn "Họ và tên", "Họ tên", "Name"
-    name_match = re.search(
-        r'(?:H[oọ]\s+(?:v[aà]\s+)?t[eê]n|Full\s*Name)[:\s]+([^\n\d]{3,60})',
-        raw_text,
+# Bảng ký tự hoa/thường có dấu tiếng Việt
+_VN_UPPER = "A-ZĐÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴ"
+_VN_LOWER = "a-zđàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ"
+
+# Mỗi từ tên: 2-7 ký tự (Vietnamese name word hiếm khi dài hơn — "Thường", "Phương")
+# Title case: chữ hoa đầu + 1..6 chữ thường ("Nguyễn", "Trương")
+_NAME_WORD_TITLE = rf"[{_VN_UPPER}][{_VN_LOWER}]{{1,6}}"
+# ALL CAPS: 2..7 chữ hoa ("TRƯƠNG", "NGUYỄN") — dùng cho CCCD
+_NAME_WORD_UPPER = rf"[{_VN_UPPER}]{{2,7}}"
+
+# Tên đầy đủ Title: 2..5 từ
+_NAME_PATTERN = re.compile(rf"\b({_NAME_WORD_TITLE}(?:\s+{_NAME_WORD_TITLE}){{1,4}})\b")
+# Tên đầy đủ ALL CAPS: 2..5 từ (CCCD format)
+_NAME_PATTERN_UPPER = re.compile(rf"\b({_NAME_WORD_UPPER}(?:\s+{_NAME_WORD_UPPER}){{1,4}})\b")
+
+
+def _strip_diacritics(s: str) -> str:
+    """Bỏ dấu để so sánh (Nguyễn → Nguyen, Đức → Duc)."""
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", s or "")
+    cleaned = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return cleaned.replace("đ", "d").replace("Đ", "D")
+
+
+# Set surname không dấu để bắt OCR mất dấu (TRUONG, NGUYEN, ...)
+_VN_SURNAMES_STRIPPED = {_strip_diacritics(s).lower() for s in _VN_SURNAMES}
+
+
+def _is_vn_surname(word: str) -> bool:
+    """Kiểm tra 1 từ có phải họ Việt phổ biến, chấp nhận title/upper/không dấu."""
+    if not word:
+        return False
+    if word in _VN_SURNAMES:
+        return True
+    if word.title() in _VN_SURNAMES:
+        return True
+    if _strip_diacritics(word).lower() in _VN_SURNAMES_STRIPPED:
+        return True
+    return False
+
+
+def _title_case_vn(name: str) -> str:
+    """Title-case 1 tên (TRƯƠNG ANH ĐỨC → Trương Anh Đức)."""
+    return " ".join(w.capitalize() for w in name.split())
+
+
+_NAME_WORD_FULL_TITLE = re.compile(rf"^{_NAME_WORD_TITLE}$")
+_NAME_WORD_FULL_UPPER = re.compile(rf"^{_NAME_WORD_UPPER}$")
+
+
+def _is_name_word(w: str) -> bool:
+    return bool(_NAME_WORD_FULL_TITLE.match(w) or _NAME_WORD_FULL_UPPER.match(w))
+
+
+def _iter_name_candidates(text: str):
+    """
+    Sinh các candidate 2..5 từ tên liên tiếp từ text.
+    Khác `re.finditer` (greedy, không overlap): trả về MỌI sub-window 2..5
+    trong các run từ tên liên tiếp → tránh nuốt "Thành phố" cùng với tên thật.
+    """
+    tokens = re.split(r"\s+", text.strip())
+    n = len(tokens)
+    i = 0
+    while i < n:
+        if not _is_name_word(tokens[i]):
+            i += 1
+            continue
+        # Run liên tiếp [i, j) các từ tên hợp lệ
+        j = i
+        while j < n and _is_name_word(tokens[j]):
+            j += 1
+        run_len = j - i
+        if run_len >= 2:
+            # Tạo mọi window 2..5 trong run, mọi offset bắt đầu
+            for size in range(2, min(6, run_len + 1)):
+                for start in range(i, j - size + 1):
+                    yield " ".join(tokens[start:start + size])
+        i = j
+
+# OCR confusion: ký tự dễ nhầm giữa chữ và số
+_OCR_CONFUSIONS = {
+    "O": "0", "Q": "0", "D": "0",
+    "I": "1", "L": "1", "|": "1", "l": "1",
+    "Z": "2", "S": "5", "B": "8",
+    "G": "6", "T": "7", "A": "4",
+}
+
+# Header/label phổ biến trên thẻ SV — KHÔNG phải tên dù khớp pattern
+_NAME_BLACKLIST = {
+    "Trường", "Đại", "Học", "Viện", "Khoa", "Bộ", "Môn", "Sinh", "Viên",
+    "Thẻ", "Giáo", "Dục", "Cao", "Đẳng", "Mã", "Số", "Họ", "Tên", "Ngày",
+    "Tháng", "Năm", "Sinh", "Lớp", "Khóa", "Quốc", "Gia", "Việt", "Nam",
+    "Identity", "Student", "Card", "University", "College", "School",
+    "Department", "Faculty", "Date", "Birth", "Name", "Full",
+}
+
+# Các từ chỉ địa danh thường gặp — phạt mạnh khi xuất hiện trong candidate tên
+_PLACE_NAME_PARTS = {
+    "Nội", "Phố", "Tỉnh", "Cộng", "Hòa", "Hoà", "Xã", "Hội", "Chủ", "Nghĩa",
+    "Bách", "Thành", "Hóa", "Hoá",
+}
+
+# Sửa lỗi OCR phổ biến cho text tiếng Việt
+# Pattern: word-level substitution + character-level confusion in alphabetic context
+_OCR_TEXT_FIXES = [
+    # q ↔ g khi sau N (Nquyễn → Nguyễn)
+    (re.compile(r"\bNq([uướờ])"), r"Ng\1"),
+    (re.compile(r"\bnq([uướờ])"), r"ng\1"),
+    # Vần → Văn (a/ă thường nhầm)
+    (re.compile(r"\bV[àầ]n\b"), "Văn"),
+    # Đực → Đức (chỉ áp dụng nếu đứng riêng, không phải động từ)
+    (re.compile(r"\bĐực\b"), "Đức"),
+    # 0 trong từ chữ → o/O
+    (re.compile(r"([" + _VN_UPPER + r"])0(?=[" + _VN_LOWER + r"])"), r"\1o"),
+    # 1 ở giữa chữ → l/i
+    (re.compile(r"([" + _VN_LOWER + r"])1(?=[" + _VN_LOWER + r"])"), r"\1i"),
+]
+
+
+def fix_ocr_text(text: str) -> str:
+    """Sửa các lỗi OCR phổ biến trên text tiếng Việt."""
+    fixed = text
+    for pattern, repl in _OCR_TEXT_FIXES:
+        fixed = pattern.sub(repl, fixed)
+    return fixed
+
+
+# Các từ tiếng Anh/Việt phổ biến trên thẻ KHÔNG phải MSSV
+_MSSV_WORD_BLACKLIST = {
+    "REPUBLIC", "VIETNAM", "SOCIALIST", "IDENTITY", "STUDENT", "UNIVERSITY",
+    "COLLEGE", "DEPARTMENT", "FACULTY", "PERSONAL", "PASSPORT",
+    "DIPLOMA", "CERTIFICATE", "REGISTER", "REGISTRATION",
+}
+
+
+def _mssv_candidates(text: str, min_digits: int = 5) -> List[str]:
+    """
+    Sinh danh sách MSSV ứng viên từ text, có sửa các lỗi OCR phổ biến.
+    - Yêu cầu ≥ min_digits chữ số (loại "REPUBLIC", "IDENTITY"...)
+    - Bỏ qua các từ tiếng Anh phổ biến.
+    """
+    cands: List[str] = []
+    seen: set = set()
+
+    def _accept(cand: str) -> bool:
+        if not (7 <= len(cand) <= 10):
+            return False
+        if cand in seen:
+            return False
+        if cand.upper() in _MSSV_WORD_BLACKLIST:
+            return False
+        # Bỏ token nguyên gốc là từ tiếng Anh (chỉ có chữ cái thuần)
+        if cand.isalpha():
+            return False
+        digit_count = sum(c.isdigit() for c in cand)
+        if digit_count < min_digits:
+            return False
+        return True
+
+    # Tìm cụm 7-10 ký tự gồm chữ in hoa + số + ký tự dễ nhầm
+    for m in re.finditer(r"[A-Z0-9OQDILZSBGT|l]{7,10}", text):
+        raw = m.group(0)
+        # Bản map toàn bộ → số (cho MSSV thuần số)
+        fixed = "".join(_OCR_CONFUSIONS.get(c, c) for c in raw)
+        for cand in (fixed, raw):
+            cand_clean = cand.strip()
+            if _accept(cand_clean):
+                seen.add(cand_clean)
+                cands.append(cand_clean)
+    # Cũng thử thuần số gốc (đã đúng)
+    for m in re.finditer(r"\b\d{7,10}\b", text):
+        if _accept(m.group(0)):
+            seen.add(m.group(0))
+            cands.append(m.group(0))
+    return cands
+
+
+def _score_name_candidate(name: str, y_norm: float, line_conf: float) -> float:
+    """Cho điểm 1 candidate tên để chọn cái tốt nhất."""
+    words = name.split()
+    if not words:
+        return 0.0
+
+    # Loại nếu BẤT KỲ từ nào trong blacklist (header label)
+    # Check cả title case để bắt ALL CAPS header (TRƯỜNG → Trường ∈ blacklist)
+    if any(w in _NAME_BLACKLIST or w.title() in _NAME_BLACKLIST for w in words):
+        return -100.0
+
+    score = line_conf / 10.0
+    # Có họ Việt phổ biến → +15 (chấp nhận title/upper/không dấu)
+    if _is_vn_surname(words[0]):
+        score += 15.0
+    # Bonus theo số từ (3-4 từ là tên Việt điển hình)
+    if 3 <= len(words) <= 4:
+        score += 8.0
+    elif len(words) == 2:
+        score += 3.0
+    # Vị trí: bonus liên tục (0.0 đỉnh → +6, 1.0 đáy → 0)
+    score += max(0, 6.0 * (1.0 - y_norm))
+    # Phạt nếu chứa số
+    if any(c.isdigit() for c in name):
+        score -= 10.0
+    # Phạt nếu candidate có >1 từ là surname (tên Việt thật chỉ có 1 surname ở đầu)
+    surname_count = sum(1 for w in words if _is_vn_surname(w))
+    if surname_count > 1:
+        score -= 15.0
+    # Phạt nếu chứa từ là place name part (Hà NỘI, Thanh HÓA, etc.)
+    if any(w.title() in _PLACE_NAME_PARTS for w in words):
+        score -= 10.0
+    return score
+
+
+def extract_student_info(
+    raw_text: str,
+    blocks: List[Dict[str, Any]] | None = None,
+    image_height: int | None = None,
+) -> dict:
+    """
+    Bóc tách thông tin sinh viên từ OCR.
+    - Nếu có `blocks` (với bbox) và `image_height` → dùng spatial heuristics
+      để chọn tên (ưu tiên nửa trên, ưu tiên dòng có họ Việt).
+    - Tên không bắt buộc có nhãn "Họ tên".
+    - MSSV thử thêm các candidate đã sửa lỗi OCR confusion.
+    - Áp dụng fix_ocr_text để sửa lỗi OCR phổ biến trước khi extract.
+    """
+    # Sửa lỗi OCR trước khi extract
+    text = fix_ocr_text(raw_text)
+
+    # ── MSSV ────────────────────────────────────────────────────────────
+    mssv_cands = _mssv_candidates(text)
+    # Ưu tiên candidate là số thuần (8 chữ số là phổ biến nhất ở VN)
+    mssv_cands.sort(key=lambda c: (not c.isdigit(), abs(len(c) - 8)))
+    student_id = mssv_cands[0] if mssv_cands else None
+
+    # ── Tên ─────────────────────────────────────────────────────────────
+    full_name: str | None = None
+
+    # 1. Ưu tiên có nhãn — chấp nhận cả title lẫn ALL CAPS
+    # Tách 2 bước: tìm vị trí label (case-insensitive) → match name (case-sensitive)
+    label_match = re.search(
+        r"(?:H[oọ]\s+(?:v[aà]\s+)?t[eê]n|Full\s*Name)[:\s]+",
+        text,
         re.IGNORECASE,
     )
+    if label_match:
+        after_label = text[label_match.end():].lstrip()
+        name_match = re.match(
+            rf"({_NAME_WORD_TITLE}(?:[ \t]+{_NAME_WORD_TITLE}){{1,4}}|"
+            rf"{_NAME_WORD_UPPER}(?:[ \t]+{_NAME_WORD_UPPER}){{1,4}})",
+            after_label,
+        )
+        if name_match:
+            cand = name_match.group(1).strip()
+            if not any(w in _NAME_BLACKLIST or w.title() in _NAME_BLACKLIST for w in cand.split()):
+                full_name = cand
 
-    # Ngày sinh: dd/mm/yyyy, dd-mm-yyyy, dd.mm.yyyy
-    birth_match = re.search(r'\b(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4})\b', raw_text)
+    # 2. Spatial scan qua từng line — chọn candidate điểm cao nhất
+    if not full_name and blocks and image_height:
+        best_score = -1.0
+        for blk in blocks:
+            for line in blk.get("lines", []):
+                line_text = fix_ocr_text(line.get("text", ""))
+                line_conf = line.get("conf", 0.0)
+                bbox = line.get("bbox", [0, 0, 0, 0])
+                y_center = (bbox[1] + bbox[3]) / 2.0
+                y_norm = y_center / max(image_height, 1)
+                for cand in _iter_name_candidates(line_text):
+                    sc = _score_name_candidate(cand, y_norm, line_conf)
+                    if sc > best_score:
+                        best_score = sc
+                        full_name = cand
 
-    # Trường, Viện: sau "Trường", "Viện", "School"
+    # 3. Fallback: scoring-based qua sliding window (chọn candidate điểm cao nhất)
+    if not full_name:
+        best_score = -1.0
+        for cand in _iter_name_candidates(text):
+            sc = _score_name_candidate(cand, y_norm=0.3, line_conf=80.0)
+            if sc > best_score:
+                best_score = sc
+                full_name = cand
+
+    # Chuẩn hoá: title-case nếu ALL CAPS, để hiển thị đẹp và so DB nhất quán
+    if full_name and full_name.isupper():
+        full_name = _title_case_vn(full_name)
+
+    # ── Ngày sinh ───────────────────────────────────────────────────────
+    birth_match = re.search(r"\b(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})\b", text)
+
+    # ── Trường, Viện ────────────────────────────────────────────────────
     school_match = re.search(
-        r'(?:Tr[ưu][oờ]ng|Vi[eê]n|School)[:\s]+([^\n]{3,150})',
-        raw_text,
+        r"(?:Tr[ưu][oờ]ng|Vi[eê]n|School)[:\s]+([^\n]{3,150})",
+        text,
         re.IGNORECASE,
     )
 
-    # Email
-    email_match = re.search(r'\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b', raw_text)
+    # ── Email ───────────────────────────────────────────────────────────
+    email_match = re.search(r"\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b", text)
 
     return {
-        "full_name": name_match.group(1).strip() if name_match else None,
+        "full_name": full_name,
         "birth_date": birth_match.group(1) if birth_match else None,
         "school": school_match.group(1).strip() if school_match else None,
-        "student_id": student_id_match.group(1).strip() if student_id_match else None,
+        "student_id": student_id,
+        "student_id_candidates": mssv_cands,
         "email": email_match.group(0) if email_match else None,
     }
