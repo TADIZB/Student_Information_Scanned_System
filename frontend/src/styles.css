@@ -831,6 +831,82 @@ button.active-btn {
   word-break: break-all;
 }
 
+.qr-link {
+  color: #2563eb;
+  text-decoration: underline;
+  word-break: break-all;
+}
+.qr-link:hover { color: #1d4ed8; }
+
+/* ── Overlay hiển thị link QR ngay trên khung camera ──────────────────────── */
+.qr-cam-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(92%, 460px);
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #f8fafc;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  z-index: 5;
+  animation: qr-cam-pop 220ms ease-out;
+}
+
+@keyframes qr-cam-pop {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.qr-cam-overlay-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #93c5fd;
+  margin-bottom: 6px;
+}
+
+.qr-cam-overlay-link {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: #e2e8f0;
+  text-decoration: none;
+  word-break: break-all;
+  max-height: 4.5em;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.qr-cam-overlay-link:hover { color: #fff; text-decoration: underline; }
+
+.qr-cam-overlay-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.qr-cam-btn {
+  flex: 1;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 120ms ease;
+}
+.qr-cam-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.qr-cam-btn.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+.qr-cam-btn.primary:hover { background: #1d4ed8; }
+
 /* ── Match badge ────────────────────────────────────────── */
 .match-badge {
   display: inline-block;

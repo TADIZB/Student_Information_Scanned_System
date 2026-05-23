@@ -146,7 +146,19 @@ export default function Dashboard() {
                 {selected.qr_data && (
                   <div className="raw-section">
                     <p className="raw-label">QR Raw Data:</p>
-                    <pre className="raw-pre">{selected.qr_data}</pre>
+                    {(() => {
+                      const m = selected.qr_data.match(/https?:\/\/[^\s"'<>]+/i);
+                      if (!m) return <pre className="raw-pre">{selected.qr_data}</pre>;
+                      const before = selected.qr_data.slice(0, m.index!);
+                      const after = selected.qr_data.slice(m.index! + m[0].length);
+                      return (
+                        <pre className="raw-pre">
+                          {before}
+                          <a href={m[0]} target="_blank" rel="noopener" className="qr-link">{m[0]}</a>
+                          {after}
+                        </pre>
+                      );
+                    })()}
                   </div>
                 )}
 

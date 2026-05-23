@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError, AxiosRequestConfig } from "axios";
 
 // Dùng cùng origin với frontend (Vite proxy tự chuyển tiếp sang backend)
 export const API_BASE = "";
@@ -8,6 +8,43 @@ const api = axios.create({
   baseURL: API_BASE,
   withCredentials: true,
 });
+
+// ─── Refresh token interceptor ────────────────────────────────────────────────
+// Khi access token hết hạn, BE trả 401. FE gọi /auth/refresh để rotate refresh
+// token và lấy cookie access mới, rồi retry request gốc một lần duy nhất.
+type RetryConfig = AxiosRequestConfig & { _retried?: boolean };
+
+let refreshPromise: Promise<void> | null = null;
+const refreshAccessToken = (): Promise<void> => {
+  if (!refreshPromise) {
+    refreshPromise = api.post("/auth/refresh").then(() => undefined).finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
+api.interceptors.response.use(
+  (res) => res,
+  async (error: AxiosError) => {
+    const original = error.config as RetryConfig | undefined;
+    if (!original || error.response?.status !== 401 || original._retried) {
+      return Promise.reject(error);
+    }
+    // Không tự refresh khi chính endpoint refresh/login/logout thất bại — tránh vòng lặp
+    const url = original.url || "";
+    if (url.includes("/auth/refresh") || url.endsWith("/login") || url.endsWith("/logout")) {
+      return Promise.reject(error);
+    }
+    original._retried = true;
+    try {
+      await refreshAccessToken();
+      return api.request(original);
+    } catch (refreshErr) {
+      return Promise.reject(refreshErr);
+    }
+  },
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +152,10 @@ export async function googleRegister(
 
 export async function logout(): Promise<void> {
   await api.post("/logout");
+}
+
+export async function refreshAuth(): Promise<void> {
+  await refreshAccessToken();
 }
 
 export async function getMe(): Promise<AuthUser> {

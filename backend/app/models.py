@@ -40,7 +40,7 @@ class UserIdentity(Base):
 
 
 class Session(Base):
-    """Bảng sessions – lưu session_id và thời hạn."""
+    """Bảng sessions – legacy (giữ schema cũ, không dùng từ khi chuyển sang JWT)."""
 
     __tablename__ = "sessions"
 
@@ -48,6 +48,19 @@ class Session(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
+
+
+class RefreshToken(Base):
+    """Bảng refresh_tokens – lưu hash của refresh token (rotate + revoke được)."""
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)   # SHA-256 hex (64 ký tự)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Student(Base):

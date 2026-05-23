@@ -34,6 +34,34 @@ const renderMssvStyled = (mssv: string | null) => {
   );
 };
 
+// Trích URL đầu tiên từ chuỗi QR (nếu có). Trả về { match, href }: match là chuỗi xuất hiện
+// trong raw (để highlight đúng vị trí), href là URL có scheme (để mở/hiển thị link).
+const extractUrl = (raw: string | null | undefined): { match: string; href: string } | null => {
+  if (!raw) return null;
+  const httpMatch = raw.match(/https?:\/\/[^\s"'<>]+/i);
+  if (httpMatch) return { match: httpMatch[0], href: httpMatch[0] };
+  const wwwMatch = raw.match(/www\.[^\s"'<>]+/i);
+  if (wwwMatch) return { match: wwwMatch[0], href: `https://${wwwMatch[0]}` };
+  return null;
+};
+
+const renderQrData = (raw: string) => {
+  const url = extractUrl(raw);
+  if (!url) return <pre className="raw-pre">{raw}</pre>;
+  const idx = raw.indexOf(url.match);
+  const before = raw.slice(0, idx);
+  const after = raw.slice(idx + url.match.length);
+  return (
+    <pre className="raw-pre">
+      {before}
+      <a href={url.href} target="_blank" rel="noopener" className="qr-link">
+        {url.match}
+      </a>
+      {after}
+    </pre>
+  );
+};
+
 // Màu hiển thị theo trạng thái từng bước OCR
 const STEP_COLOR: Record<string, string> = {
   pending: "#9ca3af",   // xám
@@ -46,6 +74,9 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
   const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<number | null>(null);
+
+  // Link phát hiện từ QR mới nhất, hiển thị overlay trên camera
+  const [qrOverlayUrl, setQrOverlayUrl] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -90,6 +121,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     setLookupError("");
     setManualMssv("");
     setAnalyzingPreview(null);
+    setQrOverlayUrl(null);
   }, [scanMode]);
 
   const openDetail = async (id: string) => {
@@ -150,7 +182,11 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
         const recognized = scanMode === "qr" ? !!result.qr_data : result.match_result === 1;
         if (recognized) {
-          if (scanMode === "qr") stopAutoScan();
+          if (scanMode === "qr") {
+            stopAutoScan();
+            const url = extractUrl(result.qr_data);
+            setQrOverlayUrl(url ? url.href : null);
+          }
           loadHistory();
           onScanSuccess(result);
         }
@@ -283,8 +319,41 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
             Đang xử lý...
           </div>
         )}
-        {scanMode === "qr" && <div className="qr-laser" />}
-        {scanMode === "qr" && !busy && <div className="auto-badge">AUTO</div>}
+        {scanMode === "qr" && !qrOverlayUrl && <div className="qr-laser" />}
+        {scanMode === "qr" && !busy && !qrOverlayUrl && <div className="auto-badge">AUTO</div>}
+
+        {/* Overlay hiển thị link QR vừa quét được */}
+        {scanMode === "qr" && qrOverlayUrl && (
+          <div className="qr-cam-overlay">
+            <div className="qr-cam-overlay-title">Đã quét được QR</div>
+            <a
+              href={qrOverlayUrl}
+              target="_blank"
+              rel="noopener"
+              className="qr-cam-overlay-link"
+              title={qrOverlayUrl}
+            >
+              {qrOverlayUrl}
+            </a>
+            <div className="qr-cam-overlay-actions">
+              <a
+                href={qrOverlayUrl}
+                target="_blank"
+                rel="noopener"
+                className="qr-cam-btn primary"
+              >
+                Mở link
+              </a>
+              <button
+                type="button"
+                className="qr-cam-btn"
+                onClick={() => { setQrOverlayUrl(null); startAutoScan(); }}
+              >
+                Quét tiếp
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && <div className="banner error">{error}</div>}
@@ -408,7 +477,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
           {lastResult.qr_data && (
             <div className="raw-section">
               <p className="raw-label">QR Raw Data</p>
-              <pre className="raw-pre">{lastResult.qr_data}</pre>
+              {renderQrData(lastResult.qr_data)}
             </div>
           )}
           {lastResult.scan_type === "ocr" && (lastResult.raw_text || lastResult.extracted_info) && (
@@ -540,7 +609,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                 {selected.qr_data && (
                   <div className="raw-section">
                     <p className="raw-label">QR Raw Data</p>
-                    <pre className="raw-pre">{selected.qr_data}</pre>
+                    {renderQrData(selected.qr_data)}
                   </div>
                 )}
                 {selected.scan_type === "ocr" && selected.raw_text && (

@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 from uuid import uuid4
 
 import numpy as np
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import Cookie, Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +15,15 @@ from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 
-from .auth import get_current_user, get_optional_user, google_login, google_register, login_user
+from .auth import (
+    get_current_user,
+    get_optional_user,
+    google_login,
+    google_register,
+    login_user,
+    logout_user,
+    refresh_tokens,
+)
 from .card_pdf import build_card_pdf
 from .database import get_db
 from .models import ScanHistory, Student, StudentCard, User
@@ -209,9 +217,22 @@ def auth_google_register(payload: GooglePayload, response: Response, db: DBSessi
 
 
 @app.post("/logout")
-def logout(response: Response):
-    response.delete_cookie("session_id")
-    return {"message": "Đã đăng xuất."}
+def logout(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None),
+    db: DBSession = Depends(get_db),
+):
+    return logout_user(refresh_token, response, db)
+
+
+@app.post("/auth/refresh")
+def auth_refresh(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None),
+    db: DBSession = Depends(get_db),
+):
+    """Đổi refresh token đang lưu trong cookie lấy cặp access+refresh mới (rotate)."""
+    return refresh_tokens(refresh_token, response, db)
 
 
 @app.get("/me")
@@ -373,10 +394,30 @@ async def process_scan(
             mssv = parsed.get("student_id")
             student = db.query(Student).filter(Student.student_id == mssv).first() if mssv else None
 
-            student_info = _student_to_dict(student) if student else {
-                "full_name": None, "birth_date": None, "school": None,
-                "student_id": mssv, "email": None, "avatar_url": avatar_data_url,
-            }
+            # MSSV chưa có trong bảng students nhưng QR có đủ MSSV → tự thêm mới
+            auto_created = False
+            if not student and mssv and parsed.get("full_name"):
+                student = Student(
+                    student_id=mssv,
+                    full_name=parsed.get("full_name"),
+                    school=parsed.get("school"),
+                    email=parsed.get("email"),
+                )
+                db.add(student)
+                db.flush()  # cấp UUID để StudentCard dưới đây tham chiếu được
+                auto_created = True
+
+            if student:
+                student_info = _student_to_dict(student)
+            else:
+                student_info = {
+                    "full_name": parsed.get("full_name"),
+                    "birth_date": None,
+                    "school": parsed.get("school"),
+                    "student_id": mssv,
+                    "email": parsed.get("email"),
+                    "avatar_url": avatar_data_url,
+                }
 
             scan_id = uuid4().hex
             if current_user:
@@ -405,6 +446,9 @@ async def process_scan(
                 ))
                 db.commit()
                 scan_id = str(scan_record.id)
+            elif auto_created:
+                # Không đăng nhập nhưng đã tạo Student mới → commit riêng
+                db.commit()
 
             return {
                 "scan_id": scan_id,
@@ -618,20 +662,47 @@ async def process_scan(
 
 
 def _parse_qr_mssv(qr_data: str) -> dict:
-    """Trích MSSV từ chuỗi QR. Hỗ trợ dạng 'MSSV:12345' hoặc '12345678' thuần."""
+    """Trích MSSV/họ tên từ chuỗi QR.
+
+    Hỗ trợ:
+    - URL HUST: https://ctsv.hust.edu.vn/#/card/{MSSV}/{HO_TEN}/{token}
+    - Dạng key-value: 'MSSV:12345|HoTen:...'
+    - Chuỗi thuần: '12345678' (chỉ MSSV)
+    """
     import re
+    from urllib.parse import unquote
+
     mapping = {"MSSV": "student_id", "HoTen": "full_name", "Truong": "school", "Email": "email"}
     fields: dict = {v: None for v in mapping.values()}
+
+    # 1. URL HUST ctsv (hash route): /card/<MSSV>/<HO_TEN>/<token>
+    url_match = re.search(
+        r'ctsv\.hust\.edu\.vn/#/card/(?P<mssv>[A-Za-z0-9]+)/(?P<name>[^/?#]+)',
+        qr_data,
+        re.IGNORECASE,
+    )
+    if url_match:
+        fields["student_id"] = url_match.group("mssv")
+        raw_name = unquote(url_match.group("name")).replace("_", " ").strip()
+        if raw_name:
+            # Chuẩn hoá: "LE DUY HOANG" → "Le Duy Hoang"
+            fields["full_name"] = raw_name.title() if raw_name.isupper() else raw_name
+        fields["school"] = "Đại học Bách khoa Hà Nội"
+        return fields
+
+    # 2. Key-value 'MSSV:...|HoTen:...'
     if "|" in qr_data or ":" in qr_data:
         for part in qr_data.split("|"):
             key, _, value = part.partition(":")
             if key.strip() in mapping:
                 fields[mapping[key.strip()]] = value.strip() or None
-    else:
-        # Chuỗi thuần = MSSV
-        m = re.search(r'\b([A-Z]{0,3}\d{6,12})\b', qr_data, re.IGNORECASE)
-        if m:
-            fields["student_id"] = m.group(1)
+        if fields["student_id"]:
+            return fields
+
+    # 3. Chuỗi thuần = MSSV
+    m = re.search(r'\b([A-Z]{0,3}\d{6,12})\b', qr_data, re.IGNORECASE)
+    if m:
+        fields["student_id"] = m.group(1)
     return fields
 
 

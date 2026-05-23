@@ -5,9 +5,9 @@ import basicSsl from "@vitejs/plugin-basic-ssl";
 
 // Các route của backend — proxy qua Vite để tránh mixed-content khi dùng HTTPS
 const BACKEND_ROUTES = [
-  "/register", "/login", "/logout", "/me",
+  "/register", "/login", "/logout", "/me", "/auth",
   "/process-scan", "/scan-history", "/export-card",
-  "/students", "/files",
+  "/students", "/files", "/images",
 ];
 
 const backendProxy = Object.fromEntries(
