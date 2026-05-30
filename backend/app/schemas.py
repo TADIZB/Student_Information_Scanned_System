@@ -23,3 +23,9 @@ class RegisterLocalPayload(BaseModel):
     password: str
     full_name: str | None = None
     birth_date: str | None = None
+
+
+class UpdateProfilePayload(BaseModel):
+    """Sửa thông tin profile — chỉ những trường được phép."""
+    full_name: str | None = None
+    birth_date: str | None = None

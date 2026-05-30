@@ -20,6 +20,18 @@ export interface StudentInfo {
   student_id: string | null;
   email: string | null;
   avatar_url: string | null;
+  // ─ CCCD fields (chỉ có khi scan_mode='ocr') ─
+  // Schema chính theo nghiệp vụ
+  ho_va_ten?: string | null;
+  so_cccd?: string | null;
+  ngay_sinh?: string | null;
+  dia_chi?: string | null;
+  // Trường phụ (lưu để hiển thị chi tiết nếu cần)
+  sex?: string | null;
+  nationality?: string | null;
+  hometown?: string | null;
+  residence?: string | null;
+  expiry?: string | null;
 }
 
 export interface ScanStep {
@@ -30,11 +42,17 @@ export interface ScanStep {
 }
 
 export interface ExtractedInfo {
-  full_name: string | null;
-  birth_date: string | null;
-  school: string | null;
-  student_id: string | null;
-  email: string | null;
+  // Schema CCCD theo nghiệp vụ (4 trường chính)
+  ho_va_ten: string | null;
+  so_cccd: string | null;
+  ngay_sinh: string | null;
+  dia_chi: string | null;
+  // Trường phụ
+  sex?: string | null;
+  nationality?: string | null;
+  hometown?: string | null;
+  residence?: string | null;
+  expiry?: string | null;
 }
 
 export interface ScanResult {
@@ -84,6 +102,37 @@ export interface RegisterHustInput {
 export interface RegisterLocalInput {
   username: string;
   password: string;
+  full_name?: string;
+  birth_date?: string;
+}
+
+// ─── Profile ──────────────────────────────────────────────────────────────────
+
+export interface ProfileUser {
+  id: string;
+  username: string | null;
+  email: string | null;
+  full_name: string | null;
+  birth_date: string | null;
+  has_avatar: boolean;
+  avatar_url: string | null;
+  created_at: string | null;
+}
+
+export interface ProfileStats {
+  total_scans: number;
+  qr_scans: number;
+  ocr_scans: number;
+  lookup_scans: number;
+  matched: number;
+}
+
+export interface ProfileResponse {
+  user: ProfileUser;
+  stats: ProfileStats;
+}
+
+export interface UpdateProfileInput {
   full_name?: string;
   birth_date?: string;
 }

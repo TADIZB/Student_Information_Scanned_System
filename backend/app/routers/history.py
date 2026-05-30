@@ -29,22 +29,6 @@ def get_scan_image(
     return Response(content=record.image_data, media_type=record.image_mime or "image/png")
 
 
-@router.get("/images/avatar/{scan_id}")
-def get_scan_avatar(
-    scan_id: str,
-    current_user: User = Depends(get_current_user),
-    db: DBSession = Depends(get_db),
-):
-    card = (
-        db.query(StudentCard)
-        .filter(StudentCard.scan_id == scan_id, StudentCard.user_id == current_user.id)
-        .first()
-    )
-    if not card or not card.avatar_data:
-        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh đại diện.")
-    return Response(content=card.avatar_data, media_type=card.avatar_mime or "image/jpeg")
-
-
 # ─── Lịch sử quét ────────────────────────────────────────────────────────────
 
 @router.get("/scan-history")
@@ -87,12 +71,10 @@ def scan_detail(
 
     card = db.query(StudentCard).filter(StudentCard.scan_id == scan_id).first()
 
-    # Nếu có matched_student_id thì lấy avatar từ bảng students
+    # Avatar chỉ lấy từ bảng students (nếu khớp sinh viên có ảnh đại diện)
     avatar_url: str | None = None
     if record.matched_student_id:
         avatar_url = f"/images/avatar/student/{record.matched_student_id}"
-    elif card and card.avatar_data:
-        avatar_url = f"/images/avatar/{record.id}"
 
     return {
         "id": str(record.id),

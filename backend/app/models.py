@@ -23,6 +23,8 @@ class User(Base):
     email = Column(String(200), unique=True, nullable=True)
     full_name = Column(String(200), nullable=True)
     birth_date = Column(String(20), nullable=True)   # yyyy-mm-dd hoặc dd/mm/yyyy
+    avatar_data = Column(LargeBinary, nullable=True)
+    avatar_mime = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -76,6 +78,4 @@ class StudentCard(Base):
     school = Column(String(200), nullable=True)       # Trường, Viện
     student_id = Column(String(20), nullable=True)    # Mã số sinh viên / ID No.
     email = Column(String(200), nullable=True)        # Email
-    avatar_data = Column(LargeBinary, nullable=True)  # Ảnh đại diện lưu thẳng vào DB (BYTEA)
-    avatar_mime = Column(String(20), nullable=True)   # MIME type ảnh đại diện
     created_at = Column(DateTime, default=datetime.utcnow)

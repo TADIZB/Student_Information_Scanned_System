@@ -299,11 +299,6 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
 
         {/* Form panel */}
         <div className="login-card">
-          {onBack && (
-            <button type="button" className="login-back ghost" onClick={onBack}>
-              ← Trang chủ
-            </button>
-          )}
           <div className="brand login-brand">
             <span className="brand-mark" />
             <h1>TADIZB</h1>
@@ -530,6 +525,17 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                 : mode === "login" ? "Đăng nhập" : "Đăng ký"}
             </button>
           </form>
+
+          {onBack && (
+            <button
+              type="button"
+              className="login-back ghost"
+              onClick={onBack}
+              style={{ marginTop: 12, alignSelf: "center" }}
+            >
+              ← Về trang chủ
+            </button>
+          )}
         </div>
       </div>
 

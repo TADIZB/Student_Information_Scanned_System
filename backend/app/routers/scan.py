@@ -19,20 +19,16 @@ from ..middleware.rate_limit import rate_limit_process_scan
 from ..models import ScanHistory, Student, StudentCard, User
 from ..pipeline import (
     detect_qr,
-    draw_canny_preview,
-    draw_ocr_blocks_on_image,
-    draw_quad_on_image,
-    extract_student_info,
+    extract_cccd_info,
     find_document_contour,
-    img_to_data_url,
     load_image,
-    ocr_ensemble,
+    ocr_cccd,
     pil_to_cv,
-    preprocess_for_ocr,
+    preprocess_cccd_pipeline,
     resize_image,
     warp_perspective,
 )
-from ..services.student_matching import _match_student, _student_to_dict
+from ..services.student_matching import _match_student_by_cccd, _student_to_dict
 
 router = APIRouter(tags=["scan"])
 
@@ -98,13 +94,12 @@ def _parse_qr_mssv(qr_data: str) -> dict:
 async def process_scan(
     file: UploadFile = File(...),
     scan_mode: str = Form("qr"),
-    avatar: UploadFile | None = File(None),
     current_user: User | None = Depends(get_optional_user),
     db: DBSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     scan_mode='qr' : Phát hiện QR → tra MSSV trong bảng students → trả dữ liệu từ DB.
-    scan_mode='ocr': Chụp thủ công → OCR → đối chiếu bảng students → trả 0/1 + steps.
+    scan_mode='ocr': Chụp thủ công → OCR CCCD → đối chiếu bảng students → trả 0/1 + steps.
     """
     if scan_mode not in ("qr", "ocr"):
         raise HTTPException(status_code=400, detail="scan_mode phải là 'qr' hoặc 'ocr'.")
@@ -113,14 +108,6 @@ async def process_scan(
 
     try:
         raw_data = await file.read()
-
-        avatar_bytes: bytes | None = None
-        avatar_mime: str | None = None
-        avatar_data_url: str | None = None
-        if avatar and avatar.content_type and avatar.content_type.startswith("image/"):
-            avatar_bytes = await avatar.read()
-            avatar_mime = avatar.content_type
-            avatar_data_url = _to_data_url(avatar_bytes, avatar_mime)
 
         # ════════════════════════════════════════════════════════════════════
         #  CHẾ ĐỘ QR
@@ -172,7 +159,7 @@ async def process_scan(
                     "school": parsed.get("school"),
                     "student_id": mssv,
                     "email": parsed.get("email"),
-                    "avatar_url": avatar_data_url,
+                    "avatar_url": None,
                 }
 
             scan_id = uuid4().hex
@@ -192,8 +179,6 @@ async def process_scan(
                 db.add(StudentCard(
                     scan_id=scan_record.id,
                     user_id=current_user.id,
-                    avatar_data=avatar_bytes,
-                    avatar_mime=avatar_mime,
                     full_name=student_info["full_name"],
                     birth_date=student_info["birth_date"],
                     school=student_info["school"],
@@ -229,143 +214,154 @@ async def process_scan(
             image = resize_image(load_image(raw_data))
             cv_image = pil_to_cv(image)
             steps.append({
-                "name": "1. Tải & chuẩn hoá ảnh đầu vào",
+                "name": "1. Thu thập & chuẩn hoá hình ảnh",
                 "status": "success",
                 "description": (
-                    f"Đọc ảnh, sửa hướng EXIF và thu nhỏ về tối đa 2000px "
-                    f"(kích thước hiện tại: {image.size[0]}×{image.size[1]}px)."
+                    f"Đọc ảnh, sửa hướng EXIF và chuẩn hoá độ phân giải "
+                    f"({image.size[0]}×{image.size[1]}px)."
                 ),
-                "image_url": img_to_data_url(cv_image),
+                "image_url": None,
             })
         except Exception:
-            steps.append({"name": "1. Tải & chuẩn hoá ảnh đầu vào", "status": "fail", "description": "Không đọc được file ảnh.", "image_url": None})
+            steps.append({"name": "1. Thu thập & chuẩn hoá hình ảnh", "status": "fail",
+                          "description": "Không đọc được file ảnh.", "image_url": None})
             raise HTTPException(status_code=422, detail="Không đọc được file ảnh.")
 
-        # Bước 2: Edge detection (Canny) — minh hoạ
+        # Pipeline 7 bước CCCD ════════════════════════════════════════════════
         try:
-            edge_preview = draw_canny_preview(cv_image)
-            steps.append({
-                "name": "2. Phát hiện cạnh (Canny + GaussianBlur)",
-                "status": "success",
-                "description": "Khử nhiễu Gaussian rồi dò cạnh bằng Canny (50, 150) để tìm các đường biên có thể là tài liệu.",
-                "image_url": img_to_data_url(edge_preview),
-            })
-        except Exception:
-            pass
+            cleaned, intermediates = preprocess_cccd_pipeline(cv_image)
+        except Exception as exc:
+            steps.append({"name": "Pipeline tiền xử lý", "status": "fail",
+                          "description": str(exc), "image_url": None})
+            raise HTTPException(status_code=422, detail=f"Lỗi tiền xử lý: {exc}")
 
-        # Bước 3: Phát hiện biên tài liệu — vẽ tứ giác lên ảnh gốc
+        # Lưu ảnh ROI đã warp (step 2) để hiển thị + lưu DB
+        warped_bgr = intermediates["step2_roi"]
+        warped_bytes = _warped_to_png_bytes(warped_bgr)
+
+        # Bước 2: ROI detection
         quad = find_document_contour(cv_image)
-        if quad is not None:
-            quad_overlay = draw_quad_on_image(cv_image, quad.tolist())
-            steps.append({
-                "name": "3. Khoanh vùng tài liệu (tứ giác 4 góc)",
-                "status": "success",
-                "description": "Lọc contour kín gần hình tứ giác, chọn vùng có diện tích lớn nhất. 4 chấm đỏ là 4 góc phát hiện được (TL/TR/BR/BL).",
-                "image_url": img_to_data_url(quad_overlay),
-            })
-        else:
-            steps.append({
-                "name": "3. Khoanh vùng tài liệu (tứ giác 4 góc)",
-                "status": "warning",
-                "description": "Không tìm được tứ giác đủ rõ — sẽ dùng nguyên ảnh đầu vào, bỏ qua bước warp.",
-                "image_url": img_to_data_url(cv_image),
-            })
-
-        # Bước 4: Warp perspective — ảnh đã được cắt + nắn thẳng
-        warped = warp_perspective(cv_image)
-        warped_bytes = _warped_to_png_bytes(warped.image)
         steps.append({
-            "name": "4. Cắt & nắn phối cảnh (Warp Perspective)",
-            "status": "success" if warped.used_warp else "warning",
+            "name": "2. Phát hiện ROI & tạo mặt nạ",
+            "status": "success" if quad is not None else "warning",
             "description": (
-                f"Áp dụng phép biến đổi phối cảnh đưa tài liệu về hình chữ nhật thẳng "
-                f"({warped.image.shape[1]}×{warped.image.shape[0]}px)."
-                if warped.used_warp
-                else "Bỏ qua warp do không có 4 góc rõ — giữ nguyên ảnh."
+                "Đã phát hiện 4 góc thẻ và crop về vùng quan tâm."
+                if quad is not None
+                else "Không tìm được 4 góc đủ rõ — sẽ xử lý nguyên ảnh đầu vào."
             ),
-            "image_url": img_to_data_url(warped.image),
+            "image_url": None,
         })
 
-        # Bước 5: Tiền xử lý ảnh cho OCR (grayscale + CLAHE + threshold + denoise)
-        try:
-            preprocessed = preprocess_for_ocr(warped.image)
-            steps.append({
-                "name": "5. Tăng cường ảnh cho OCR",
-                "status": "success",
-                "description": "Chuỗi: Grayscale → CLAHE (tăng tương phản cục bộ) → Adaptive Threshold → Median Blur. Đây chính là ảnh mà Tesseract sẽ đọc.",
-                "image_url": img_to_data_url(preprocessed),
-            })
-        except Exception:
-            steps.append({"name": "5. Tăng cường ảnh cho OCR", "status": "fail", "description": "Lỗi khi tiền xử lý ảnh.", "image_url": None})
-            raise HTTPException(status_code=422, detail="Lỗi tiền xử lý ảnh.")
+        # Bước 3: Noise reduction
+        steps.append({
+            "name": "3. Giảm nhiễu & lọc hình ảnh",
+            "status": "success",
+            "description": "Grayscale + Median Blur (giữ biên ký tự, triệt tiêu hạt nhiễu nhỏ).",
+            "image_url": None,
+        })
 
-        # Bước 6: OCR ensemble — chạy Tesseract trên nhiều variant × PSM
+        # Bước 4: Flat-fielding
+        steps.append({
+            "name": "4. Hiệu chỉnh độ đồng nhất ánh sáng (Flat-fielding)",
+            "status": "success",
+            "description": "Ước tính ma trận ánh sáng nền (Gaussian blur lớn) rồi chia ảnh / nền → triệt tiêu vùng cháy sáng (glare/hotspot).",
+            "image_url": None,
+        })
+
+        # Bước 5: Adaptive thresholding
+        steps.append({
+            "name": "5. Phân ngưỡng thích ứng cục bộ",
+            "status": "success",
+            "description": "Adaptive Gaussian Threshold (blockSize=25, C=10) → ảnh nhị phân đen-trắng tuyệt đối.",
+            "image_url": None,
+        })
+
+        # Bước 6: Morphology refinement
+        steps.append({
+            "name": "6. Tinh chỉnh hình thái & làm sạch",
+            "status": "success",
+            "description": "Opening (2×2) → loại vệt mực thừa, tách ký tự dính. Closing (2×2) → nối nét đứt, làm mượt biên.",
+            "image_url": None,
+        })
+
+        # Bước 7: Skew correction
+        steps.append({
+            "name": "7. Hiệu chỉnh độ lệch & biến đổi phối cảnh",
+            "status": "success",
+            "description": "Hough transform tính góc nghiêng dòng chữ + Perspective transform đưa phôi thẻ về phẳng đứng.",
+            "image_url": None,
+        })
+
+        # ── OCR trên ảnh ROI đã warp (ensemble nhiều biến thể × PSM) ─────────
+        # KHÔNG OCR trên ảnh nhị phân `cleaned` (morphology phá dấu tiếng Việt).
         try:
-            blocks = ocr_ensemble(warped.image)
-            raw_text = "\n".join(
-                line["text"] for block in blocks for line in block.get("lines", [])
-            ).strip()
+            raw_text, blocks = ocr_cccd(warped_bgr)
             num_lines = sum(len(b.get("lines", [])) for b in blocks)
             avg_conf = (
                 sum(line["conf"] for b in blocks for line in b.get("lines", [])) / num_lines
                 if num_lines else 0.0
             )
-            ocr_overlay = draw_ocr_blocks_on_image(preprocessed, blocks)
             steps.append({
-                "name": "6. Nhận dạng văn bản (Tesseract OCR ensemble)",
+                "name": "→ Nhận dạng văn bản (Tesseract OCR)",
                 "status": "success" if raw_text else "warning",
                 "description": (
-                    f"Chạy OCR trên 4 biến thể ảnh × 3 chế độ PSM, gộp dòng theo IoU. "
-                    f"Tổng {num_lines} dòng (độ tin cậy trung bình {avg_conf:.1f}%). "
-                    f"Các khung đỏ là vùng chữ giữ lại."
+                    f"Đã nhận {num_lines} dòng (độ tin cậy trung bình {avg_conf:.1f}%)."
                     if raw_text else "Không nhận dạng được dòng chữ nào."
                 ),
-                "image_url": img_to_data_url(ocr_overlay),
+                "image_url": None,
             })
-        except HTTPException:
-            raise
         except Exception:
-            steps.append({"name": "6. Nhận dạng văn bản (Tesseract OCR)", "status": "fail", "description": "Lỗi khi chạy OCR.", "image_url": None})
+            steps.append({"name": "→ Nhận dạng văn bản (Tesseract OCR)", "status": "fail",
+                          "description": "Lỗi khi chạy OCR.", "image_url": None})
             raise HTTPException(status_code=422, detail="Lỗi khi nhận dạng văn bản.")
 
-        # Bước 7: Bóc tách & đối chiếu dữ liệu sinh viên
-        ocr_info = extract_student_info(
+        # ── Bóc tách CCCD & đối chiếu sinh viên ──────────────────────────────
+        cccd = extract_cccd_info(
             raw_text,
             blocks=blocks,
-            image_height=warped.image.shape[0],
+            image_height=warped_bgr.shape[0],
         )
-        mssv_cands = ocr_info.get("student_id_candidates") or []
-        # Loại key nội bộ trước khi trả về frontend
-        ocr_info_public = {k: v for k, v in ocr_info.items() if k != "student_id_candidates"}
 
-        student, match_note = _match_student(db, mssv_cands, ocr_info.get("full_name"))
+        student, match_note = _match_student_by_cccd(
+            db,
+            full_name=cccd.get("ho_va_ten"),
+            birth_date=cccd.get("ngay_sinh"),
+        )
 
         extracted_summary = " · ".join(
             f"{k}: {v}" for k, v in [
-                ("MSSV", ocr_info_public.get("student_id")),
-                ("Họ tên", ocr_info_public.get("full_name")),
-                ("Ngày sinh", ocr_info_public.get("birth_date")),
-                ("Email", ocr_info_public.get("email")),
+                ("Số CCCD", cccd.get("so_cccd")),
+                ("Họ tên", cccd.get("ho_va_ten")),
+                ("Ngày sinh", cccd.get("ngay_sinh")),
+                ("Địa chỉ", cccd.get("dia_chi")),
             ] if v
         ) or "Không bóc được trường nào."
 
         if student:
             match_result = 1
-            student_info = _student_to_dict(student)
+            student_info = {
+                **cccd,
+                "student_id": student.student_id,
+                "school": student.school,
+                "email": student.email,
+                "avatar_url": (
+                    f"/images/avatar/student/{student.id}" if student.avatar_data else None
+                ),
+            }
             steps.append({
-                "name": "7. Bóc tách & đối chiếu dữ liệu sinh viên",
+                "name": "→ Bóc tách CCCD & đối chiếu sinh viên",
                 "status": "success",
                 "description": f"Bóc được: {extracted_summary}. → {match_note}.",
                 "image_url": None,
             })
         else:
             match_result = 0
-            student_info = {**ocr_info_public, "avatar_url": avatar_data_url}
-            cand_note = f" Đã thử các MSSV: {', '.join(mssv_cands[:5])}." if mssv_cands else ""
+            student_info = {**cccd, "student_id": None, "school": None, "email": None,
+                            "avatar_url": None}
             steps.append({
-                "name": "7. Bóc tách & đối chiếu dữ liệu sinh viên",
-                "status": "fail",
-                "description": f"Bóc được: {extracted_summary}.{cand_note} → Không khớp sinh viên nào.",
+                "name": "→ Bóc tách CCCD & đối chiếu sinh viên",
+                "status": "fail" if any(cccd.get(k) for k in ("ho_va_ten", "so_cccd")) else "warning",
+                "description": f"Bóc được: {extracted_summary}. → Không khớp sinh viên nào.",
                 "image_url": None,
             })
 
@@ -383,16 +379,17 @@ async def process_scan(
             )
             db.add(scan_record)
             db.flush()
+            # Lưu vào student_cards: map các trường CCCD vào schema sinh viên
+            #   full_name, birth_date: từ CCCD
+            #   student_id, school, email: từ student record nếu khớp, ngược lại để trống
             db.add(StudentCard(
                 scan_id=scan_record.id,
                 user_id=current_user.id,
-                avatar_data=avatar_bytes,
-                avatar_mime=avatar_mime,
-                full_name=student_info.get("full_name"),
-                birth_date=student_info.get("birth_date"),
-                school=student_info.get("school"),
-                student_id=student_info.get("student_id"),
-                email=student_info.get("email"),
+                full_name=cccd.get("ho_va_ten"),
+                birth_date=cccd.get("ngay_sinh"),
+                school=student.school if student else None,
+                student_id=student.student_id if student else None,
+                email=student.email if student else None,
             ))
             db.commit()
             scan_id = str(scan_record.id)
@@ -407,7 +404,7 @@ async def process_scan(
             "steps": steps,
             "blocks": blocks,
             "raw_text": raw_text,
-            "extracted_info": ocr_info_public,
+            "extracted_info": cccd,
         }
 
     except HTTPException:

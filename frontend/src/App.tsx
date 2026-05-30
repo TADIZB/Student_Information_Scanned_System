@@ -11,6 +11,7 @@ import { getMe, logout } from "./api";
 import type { ScanResult } from "./api";
 import Homepage from "./pages/Homepage";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
 import Scanner from "./pages/Scanner";
 
 type Tab = "qr" | "ocr";
@@ -66,7 +67,7 @@ function Topbar({ tab }: { tab?: Tab }) {
             className={`tab${tab === "ocr" ? " active" : ""}`}
             onClick={() => navigate("/scan/ocr")}
           >
-            OCR
+            OCR CCCD
           </button>
         </nav>
       )}
@@ -74,7 +75,13 @@ function Topbar({ tab }: { tab?: Tab }) {
       <div className="actions">
         {username ? (
           <>
-            <span className="username-label">{username}</span>
+            <span
+              className="username-label clickable"
+              onClick={() => navigate("/profile")}
+              title="Hồ sơ"
+            >
+              {username}
+            </span>
             <button className="ghost" onClick={handleLogout}>
               Đăng xuất
             </button>
@@ -98,12 +105,25 @@ function Topbar({ tab }: { tab?: Tab }) {
 
 function HomeRoute() {
   const navigate = useNavigate();
+  const { username } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      window.location.reload();
+    }
+  };
+
   return (
     <Homepage
+      username={username}
       onLoginClick={() => navigate("/login")}
       onRegisterClick={() => navigate("/register")}
       onQrClick={() => navigate("/scan/qr")}
       onOcrClick={() => navigate("/scan/ocr")}
+      onProfileClick={() => navigate("/profile")}
+      onLogoutClick={handleLogout}
     />
   );
 }
@@ -122,6 +142,22 @@ function ScanRoute({ mode }: { mode: Tab }) {
           onScanSuccess={handleScanSuccess}
           onLoginClick={() => navigate("/login")}
         />
+      </main>
+    </div>
+  );
+}
+
+function ProfileRoute() {
+  const navigate = useNavigate();
+  const { username } = useAuth();
+  if (!username) {
+    return <Navigate to="/login" state={{ from: { pathname: "/profile" } }} replace />;
+  }
+  return (
+    <div className="app">
+      <Topbar />
+      <main className="main-content">
+        <Profile onBack={() => navigate("/scan/qr")} />
       </main>
     </div>
   );
@@ -183,6 +219,7 @@ function AppRoutes() {
         <Route path="/register" element={<AuthRoute initialMode="register" />} />
         <Route path="/scan/qr" element={<ScanRoute mode="qr" />} />
         <Route path="/scan/ocr" element={<ScanRoute mode="ocr" />} />
+        <Route path="/profile" element={<ProfileRoute />} />
         {/* Route không tồn tại → quay về trang chủ */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

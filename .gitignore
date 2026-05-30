@@ -1,25 +1,38 @@
-.venv/
-.venv
-CLAUDE.md
-
 .env
 .env.*
 !.env.example
 
-node_modules/
-dist/
-*.log
+CLAUDE.md
 
+.venv/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+node_modules/
+dist/
+dev-dist/
+.vite/
+*.tsbuildinfo
+
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
-# Thư mục lưu file tạm của backend (ảnh đã warp, PDF xuất ra)
-backend/storage/
-
-# DB SQLite dev local (fallback khi DATABASE_URL trống)
-backend/dev.db
-*.sqlite
-*.sqlite3
+.DS_Store
+Thumbs.db
+desktop.ini

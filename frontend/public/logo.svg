@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="cardHead" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#991b1b"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.8"/>
+      <feOffset dx="0" dy="1"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- White squircle background with subtle border -->
+  <rect width="64" height="64" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Camera viewfinder 4 corners (red) -->
+  <g stroke="#dc2626" stroke-width="2.6" fill="none" stroke-linecap="round">
+    <path d="M16 12 L11 12 L11 17"/>
+    <path d="M48 12 L53 12 L53 17"/>
+    <path d="M16 52 L11 52 L11 47"/>
+    <path d="M48 52 L53 52 L53 47"/>
+  </g>
+
+  <!-- Student card mini (centered) -->
+  <g filter="url(#cardShadow)">
+    <rect x="18" y="20" width="28" height="22" rx="3.2" fill="#f8fafc" stroke="#e2e8f0" stroke-width="0.6"/>
+    <!-- Card header bar -->
+    <path d="M18 22.5 Q18 20 20.5 20 L43.5 20 Q46 20 46 22.5 L46 26 L18 26 Z" fill="url(#cardHead)"/>
+    <!-- Photo placeholder -->
+    <rect x="20.5" y="28" width="7" height="9" rx="1" fill="#e2e8f0"/>
+    <circle cx="24" cy="31" r="1.4" fill="#94a3b8"/>
+    <path d="M21.4 36 Q24 33.6 26.6 36 L26.6 37 L21.4 37 Z" fill="#94a3b8"/>
+    <!-- Info lines -->
+    <rect x="29.5" y="28.5" width="13" height="1.5" rx="0.7" fill="#334155"/>
+    <rect x="29.5" y="31.5" width="10" height="1.2" rx="0.6" fill="#94a3b8"/>
+    <rect x="29.5" y="34"   width="11" height="1.2" rx="0.6" fill="#94a3b8"/>
+    <!-- Mini QR -->
+    <g transform="translate(38.5,36)">
+      <rect width="5.5" height="5.5" rx="0.5" fill="#1f2937"/>
+      <rect x="0.8" y="0.8" width="1.4" height="1.4" fill="white"/>
+      <rect x="3.3" y="0.8" width="1.4" height="1.4" fill="white"/>
+      <rect x="0.8" y="3.3" width="1.4" height="1.4" fill="white"/>
+      <rect x="3.3" y="3.3" width="1.4" height="1.4" fill="white"/>
+    </g>
+  </g>
+
+  <!-- Scan line (red) crossing through card -->
+  <line x1="10" y1="32" x2="54" y2="32"
+        stroke="#dc2626" stroke-width="1.1" stroke-dasharray="2,1.6" opacity="0.85"/>
+  <line x1="10" y1="32" x2="54" y2="32"
+        stroke="#ef4444" stroke-width="2.6" opacity="0.22" stroke-linecap="round"/>
+</svg>

@@ -1,8 +1,8 @@
 import React, { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
+import jsQR from "jsqr";
 import {
   API_BASE,
-  getExportCardUrl,
   getScanDetail,
   getScanHistory,
   lookupStudent,
@@ -64,10 +64,10 @@ const renderQrData = (raw: string) => {
 
 // Màu hiển thị theo trạng thái từng bước OCR
 const STEP_COLOR: Record<string, string> = {
-  pending: "#9ca3af",   // xám
-  success: "#22c55e",   // xanh lá
-  warning: "#f59e0b",   // vàng (warp không tìm được biên nhưng vẫn tiếp tục)
-  fail: "#ef4444",   // đỏ
+  pending: "#9ca3af",
+  success: "#22c55e",
+  warning: "#f59e0b",
+  fail: "#ef4444",
 };
 
 export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginClick }: Props) {
@@ -77,6 +77,33 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
   // Link phát hiện từ QR mới nhất, hiển thị overlay trên camera
   const [qrOverlayUrl, setQrOverlayUrl] = useState<string | null>(null);
+
+  // Danh sách camera + thiết bị đang chọn
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
+
+  const refreshCameras = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      const cams = all.filter((d) => d.kind === "videoinput");
+      setCameras(cams);
+      // Nếu chưa chọn cái nào (hoặc deviceId không còn tồn tại), chọn cái đầu
+      setDeviceId((cur) =>
+        cur && cams.some((c) => c.deviceId === cur)
+          ? cur
+          : cams[0]?.deviceId
+      );
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    refreshCameras();
+    const md = navigator.mediaDevices;
+    if (!md?.addEventListener) return;
+    md.addEventListener("devicechange", refreshCameras);
+    return () => md.removeEventListener("devicechange", refreshCameras);
+  }, [refreshCameras]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -203,15 +230,52 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     [busy, scanMode, loadHistory, onScanSuccess],
   );
 
+  // ── Detect QR client-side bằng jsQR (chạy ngay trên frame webcam) ────────
+  // Trả về true nếu frame có QR — chỉ khi đó mới gửi BE để parse + lưu.
+  const detectQrInDataUrl = useCallback((dataUrl: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        // Downscale nhẹ để decode nhanh hơn (jsQR đủ nhạy với ~640px width)
+        const MAX_W = 720;
+        const scale = img.width > MAX_W ? MAX_W / img.width : 1;
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return resolve(false);
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "attemptBoth",
+          });
+          resolve(!!code && !!code.data);
+        } catch {
+          resolve(false);
+        }
+      };
+      img.onerror = () => resolve(false);
+      img.src = dataUrl;
+    });
+  }, []);
+
   // ── Auto-scan (QR luôn bật khi mount) ────────────────────────────────────
   const startAutoScan = useCallback(() => {
     if (intervalRef.current) return;
-    intervalRef.current = window.setInterval(() => {
+    intervalRef.current = window.setInterval(async () => {
+      if (busy) return;
       const imageSrc = webcamRef.current?.getScreenshot();
       if (!imageSrc) return;
-      fetch(imageSrc).then((r) => r.blob()).then((blob) => handleBlob(blob));
-    }, 600);
-  }, [handleBlob]);
+      // Chỉ gọi BE khi đã thấy QR trong frame
+      const hasQr = await detectQrInDataUrl(imageSrc);
+      if (!hasQr) return;
+      const blob = await (await fetch(imageSrc)).blob();
+      handleBlob(blob);
+    }, 400);
+  }, [busy, detectQrInDataUrl, handleBlob]);
 
   const stopAutoScan = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -259,29 +323,43 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     }
   };
 
-  // ── Render thông tin sinh viên ────────────────────────────────────────────
-  const renderStudentInfo = (info: StudentInfo) => (
-    <div className="student-info">
-      {info.avatar_url && (
-        <img src={getImageUrl(info.avatar_url) ?? undefined} alt="Ảnh đại diện" className="student-avatar" />
-      )}
-      {([
-        ["Họ tên", info.full_name],
-        ["Ngày sinh", info.birth_date],
-        ["Trường, Viện", info.school],
-        ["Email", info.email],
-      ] as [string, string | null][]).map(([label, value]) => (
-        <div className="info-row" key={label}>
-          <span>{label}</span>
-          <strong>{value || "—"}</strong>
+  // ── Render thông tin sinh viên / CCCD ─────────────────────────────────────
+  const renderStudentInfo = (info: StudentInfo) => {
+    // Có dữ liệu CCCD bóc được? (chỉ ở chế độ OCR)
+    const hasCccd = !!(info.so_cccd || info.dia_chi || info.ho_va_ten);
+    const rows: [string, React.ReactNode][] = hasCccd
+      ? [
+          ["Họ và tên", info.ho_va_ten || info.full_name || "—"],
+          ["Số CCCD", info.so_cccd || "—"],
+          ["Ngày sinh", info.ngay_sinh || info.birth_date || "—"],
+          ["Địa chỉ", info.dia_chi || "—"],
+        ]
+      : [
+          ["Họ tên", info.full_name || "—"],
+          ["Ngày sinh", info.birth_date || "—"],
+        ];
+    rows.push(
+      ["Trường, Viện", info.school || "—"],
+      ["Email", info.email || "—"],
+    );
+    return (
+      <div className="student-info">
+        {info.avatar_url && (
+          <img src={getImageUrl(info.avatar_url) ?? undefined} alt="Ảnh đại diện" className="student-avatar" />
+        )}
+        {rows.map(([label, value]) => (
+          <div className="info-row" key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+        <div className="info-row" key="MSSV">
+          <span>MSSV</span>
+          <strong>{renderMssvStyled(info.student_id)}</strong>
         </div>
-      ))}
-      <div className="info-row" key="MSSV">
-        <span>MSSV</span>
-        <strong>{renderMssvStyled(info.student_id)}</strong>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="scanner-page">
@@ -301,16 +379,43 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
             audio={false}
             screenshotFormat="image/jpeg"
             screenshotQuality={0.92}
-            videoConstraints={{ facingMode: "environment" }}
+            videoConstraints={
+              deviceId
+                ? { deviceId: { exact: deviceId } }
+                : { facingMode: "environment" }
+            }
             className="webcam-video"
+            onUserMedia={refreshCameras}
             onUserMediaError={() => setError("Không thể mở camera. Hãy cấp quyền truy cập.")}
           />
+        )}
+
+        {/* Dropdown chọn camera — góc dưới phải */}
+        {cameras.length > 0 && !(busy && scanMode === "ocr") && (
+          <div className="cam-select-wrap" title="Chọn camera">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <select
+              className="cam-select"
+              value={deviceId || ""}
+              onChange={(e) => setDeviceId(e.target.value || undefined)}
+              aria-label="Chọn camera"
+            >
+              {cameras.map((cam, i) => (
+                <option key={cam.deviceId} value={cam.deviceId}>
+                  {cam.label || `Camera ${i + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
         <div className="card-guide">
           <span className="guide-corner tl" /><span className="guide-corner tr" />
           <span className="guide-corner bl" /><span className="guide-corner br" />
           <span className="guide-label">
-            {scanMode === "qr" ? "Xin QR" : "Chụp nè"}
+            {scanMode === "qr" ? "Đưa QR vào khung" : "Đưa CCCD vào khung"}
           </span>
         </div>
         {busy && scanMode === "ocr" && (
@@ -436,14 +541,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                 {step.visible && step.description && (
                   <p className="ocr-step-desc">{step.description}</p>
                 )}
-                {step.visible && step.image_url && (
-                  <img
-                    src={step.image_url}
-                    alt={step.name}
-                    className="ocr-step-image"
-                    loading="lazy"
-                  />
-                )}
               </div>
             );
           })}
@@ -509,15 +606,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
               )}
             </div>
           )}
-          <div style={{ marginTop: 14 }}>
-            <a
-              href={getExportCardUrl(lastResult.scan_id)}
-              download={`the_sv_${lastResult.scan_id.slice(0, 8)}.pdf`}
-              className="btn-export"
-            >
-              Xuất thẻ PDF
-            </a>
-          </div>
         </div>
       )}
 
@@ -546,7 +634,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                   <th>Loại</th>
                   <th>Kết quả</th>
                   <th>Thời gian</th>
-                  <th>Xuất PDF</th>
                 </tr>
               </thead>
               <tbody>
@@ -565,11 +652,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                       }
                     </td>
                     <td className="row-time">{new Date(r.created_at).toLocaleString("vi-VN")}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <a href={getExportCardUrl(r.id)} download={`the_sv_${r.id.slice(0, 8)}.pdf`} className="btn-export-small">
-                        PDF
-                      </a>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -618,14 +700,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                     <pre className="raw-pre">{selected.raw_text}</pre>
                   </div>
                 )}
-                <a
-                  href={getExportCardUrl(selected.id)}
-                  download={`the_sv_${selected.id.slice(0, 8)}.pdf`}
-                  className="btn-export"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Xuất thẻ PDF
-                </a>
               </>
             ) : null}
           </div>

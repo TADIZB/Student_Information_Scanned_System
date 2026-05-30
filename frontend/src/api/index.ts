@@ -4,4 +4,5 @@ export * from "./types";
 export { registerHust, registerLocal, login, logout, getMe } from "./auth";
 export { processScan } from "./scan";
 export { lookupStudent } from "./students";
-export { getScanHistory, getScanDetail, getExportCardUrl } from "./history";
+export { getScanHistory, getScanDetail } from "./history";
+export { getProfile, updateProfile, uploadAvatar, deleteAvatar, getAvatarUrl } from "./profile";

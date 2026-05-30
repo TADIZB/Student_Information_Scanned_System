@@ -3,10 +3,10 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 
-// Các route của backend — proxy qua Vite để tránh mixed-content khi dùng HTTPS
+
 const BACKEND_ROUTES = [
   "/register", "/login", "/logout", "/me", "/auth",
-  "/process-scan", "/scan-history", "/export-card",
+  "/process-scan", "/scan-history",
   "/students", "/files", "/images",
 ];
 
@@ -23,8 +23,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon.svg"],
-      devOptions: { enabled: false },  // tắt SW trong dev — tránh chặn cookie auth qua proxy
+      includeAssets: ["logo.svg"],
+      devOptions: { enabled: false },
       manifest: {
         name: "TADIZB Scanner",
         short_name: "TADIZB",
@@ -35,8 +35,7 @@ export default defineConfig({
         orientation: "portrait",
         start_url: "/",
         icons: [
-          { src: "icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+          { src: "logo.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
         ],
       },
       workbox: {

@@ -5,9 +5,21 @@ interface Props {
   onRegisterClick: () => void;
   onQrClick: () => void;
   onOcrClick: () => void;
+  // Auth state — Homepage cần biết để hiển thị topbar đúng
+  username: string | null;
+  onProfileClick?: () => void;
+  onLogoutClick?: () => void;
 }
 
-export default function Homepage({ onLoginClick, onRegisterClick, onQrClick, onOcrClick }: Props) {
+export default function Homepage({
+  onLoginClick,
+  onRegisterClick,
+  onQrClick,
+  onOcrClick,
+  username,
+  onProfileClick,
+  onLogoutClick,
+}: Props) {
   return (
     <div className="home-page">
       {/* Topbar */}
@@ -19,12 +31,29 @@ export default function Homepage({ onLoginClick, onRegisterClick, onQrClick, onO
           </div>
         </div>
         <div className="home-auth-actions">
-          <button className="ghost" onClick={onLoginClick}>
-            Đăng nhập
-          </button>
-          <button className="primary" onClick={onRegisterClick}>
-            Đăng ký
-          </button>
+          {username ? (
+            <>
+              <span
+                className="username-label clickable"
+                onClick={onProfileClick}
+                title="Hồ sơ"
+              >
+                {username}
+              </span>
+              <button className="ghost" onClick={onLogoutClick}>
+                Đăng xuất
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="ghost" onClick={onLoginClick}>
+                Đăng nhập
+              </button>
+              <button className="primary" onClick={onRegisterClick}>
+                Đăng ký
+              </button>
+            </>
+          )}
         </div>
       </header>
 

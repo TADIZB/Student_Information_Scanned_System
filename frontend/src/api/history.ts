@@ -1,4 +1,4 @@
-import { api, API_BASE } from "./client";
+import { api } from "./client";
 import type { ScanDetail, ScanRecord } from "./types";
 
 export async function getScanHistory(): Promise<ScanRecord[]> {
@@ -9,8 +9,4 @@ export async function getScanHistory(): Promise<ScanRecord[]> {
 export async function getScanDetail(scanId: string): Promise<ScanDetail> {
   const res = await api.get<ScanDetail>(`/scan-history/${scanId}`);
   return res.data;
-}
-
-export function getExportCardUrl(scanId: string): string {
-  return `${API_BASE}/export-card/${scanId}`;
 }

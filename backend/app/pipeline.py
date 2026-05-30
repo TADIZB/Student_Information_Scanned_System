@@ -297,29 +297,39 @@ def preprocess_variants_for_ocr(image: np.ndarray) -> Tuple[List[Tuple[str, np.n
     - variants: list các biến thể preprocess (đã upscale)
     - scale: tỉ lệ upscale so với input. Bbox OCR cần chia cho scale để về không gian gốc.
 
-    Bỏ bilateral (gây noise cho Tesseract khi không binarize).
+    Triết lý: KHÔNG nhị phân hóa mạnh / morphology (phá dấu tiếng Việt).
+    Ưu tiên grayscale tăng tương phản + làm nét, để Tesseract tự thresh cục bộ.
     """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
 
-    # Upscale lên ~1500px (Tesseract thích ~300 DPI cho thẻ kích thước thực)
+    # Upscale lên ~1800px để ký tự đủ lớn (~300 DPI cho thẻ kích thước thực).
+    # Chữ quá nhỏ là nguyên nhân số 1 khiến Tesseract đọc ra rác.
     h, w = gray.shape
     scale = 1.0
-    if max(h, w) < 1500:
-        scale = 1500 / max(h, w)
+    target = 1800
+    if max(h, w) < target:
+        scale = target / max(h, w)
         gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
 
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    # CLAHE nhẹ (clip 2.0) — tăng tương phản cục bộ mà không thổi phồng nhiễu
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
 
+    # Unsharp mask — làm nét nét chữ + dấu nhỏ, giúp Tesseract bắt dấu tiếng Việt
+    blur = cv2.GaussianBlur(enhanced, (0, 0), 3)
+    sharp = cv2.addWeighted(enhanced, 1.6, blur, -0.6, 0)
+
     variants: List[Tuple[str, np.ndarray]] = [
-        # 1. Grayscale + CLAHE — giữ nguyên dấu, để Tesseract tự thresh
+        # 1. Grayscale + CLAHE — giữ nguyên dấu, để Tesseract tự thresh (thường tốt nhất)
         ("clahe", enhanced),
-        # 2. Otsu binary — tốt khi nền đồng đều
+        # 2. Grayscale đã làm nét — tốt cho chữ nhỏ / hơi nhòe
+        ("sharp", sharp),
+        # 3. Otsu binary — tốt khi nền đồng đều
         ("otsu", cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
-        # 3. Adaptive với block lớn — giữ dấu tốt hơn block nhỏ
+        # 4. Adaptive với block lớn — giữ dấu tốt hơn block nhỏ, fallback ánh sáng lệch
         ("adaptive", cv2.adaptiveThreshold(
             enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 25, 10,
+            cv2.THRESH_BINARY, 31, 12,
         )),
     ]
     return variants, scale
@@ -332,6 +342,138 @@ def preprocess_for_ocr(image: np.ndarray) -> np.ndarray:
         if name == "adaptive":
             return img
     return variants[0][1]
+
+
+# ─── CCCD Pipeline 7 bước (chuẩn nghiệp vụ) ─────────────────────────────────
+#
+# Mỗi step trả về (image, status_str, description) để router log lên FE:
+#   step1_acquire       → ảnh BGR đã chuẩn hoá DPI
+#   step2_roi           → ảnh đã crop về vùng thẻ + 4 góc (warp)
+#   step3_denoise       → ảnh xám đã giảm nhiễu (median blur preserve edges)
+#   step4_flatfield     → ảnh xám đã hiệu chỉnh độ đồng nhất ánh sáng
+#   step5_threshold     → ảnh nhị phân (adaptive thresholding)
+#   step6_morphology    → ảnh nhị phân đã tinh chỉnh hình thái
+#   step7_skew_correct  → ảnh cuối đã deskew nhẹ (nếu còn nghiêng)
+
+def _step3_denoise(image_bgr: np.ndarray) -> np.ndarray:
+    """Grayscale + Median blur (giữ biên ký tự, triệt tiêu chấm nhiễu nhỏ)."""
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY) if image_bgr.ndim == 3 else image_bgr
+    # Median 3×3 giữ đường biên tốt hơn Gaussian cho text
+    return cv2.medianBlur(gray, 3)
+
+
+def _step4_flat_field(gray: np.ndarray) -> np.ndarray:
+    """Hiệu chỉnh độ đồng nhất ánh sáng (xử lý glare/hotspot).
+
+    Phương pháp Background Subtraction qua large-kernel Gaussian:
+      1. Ước tính ma trận ánh sáng nền = blur cực mạnh (sigma lớn).
+      2. Chia gray / bg, scale về [0..255] → triệt tiêu vùng cháy sáng.
+    """
+    # Kernel rất lớn để chỉ giữ low-frequency illumination
+    h, w = gray.shape
+    k = max(31, (min(h, w) // 8) | 1)   # odd, ~12.5% chiều ngắn nhất
+    bg = cv2.GaussianBlur(gray, (k, k), 0)
+    # Tránh chia 0
+    bg = np.where(bg < 1, 1, bg)
+    normalized = cv2.divide(gray, bg, scale=128).astype(np.uint8)
+    # Stretch contrast nhẹ để chữ rõ
+    normalized = cv2.normalize(normalized, None, 0, 255, cv2.NORM_MINMAX)
+    return normalized
+
+
+def _step5_adaptive_threshold(gray_uniform: np.ndarray) -> np.ndarray:
+    """Adaptive thresholding cục bộ → ảnh nhị phân (đen-trắng tuyệt đối).
+
+    Dùng Gaussian-weighted local mean, block size lớn (25) để bắt nét chữ
+    có dấu tiếng Việt, C=10 để giảm nhiễu nền sau flat-field.
+    """
+    binary = cv2.adaptiveThreshold(
+        gray_uniform, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        blockSize=25,
+        C=10,
+    )
+    return binary
+
+
+def _step6_morphology(binary: np.ndarray) -> np.ndarray:
+    """Tinh chỉnh hình thái: nối nét đứt + tách ký tự dính + làm mượt biên.
+
+    Trình tự:
+      - Opening 2×2 với fine erosion: xoá vệt mực thừa siêu nhỏ.
+      - Closing 2×2: nối lại các nét chữ bị đứt sau threshold.
+    Lưu ý: text thường có giá trị 0 (đen), nền 255 → ta đảo về MORPH trên text.
+    """
+    # Đảo: text = trắng (255) để morphology hoạt động đúng nghĩa
+    inv = cv2.bitwise_not(binary)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    # Opening: erosion → dilation (loại noise nhỏ, tách ký tự dính)
+    cleaned = cv2.morphologyEx(inv, cv2.MORPH_OPEN, kernel, iterations=1)
+    # Closing: dilation → erosion (nối nét đứt, làm mượt)
+    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+    # Đảo trở lại: text = đen, nền = trắng (Tesseract thích hơn)
+    return cv2.bitwise_not(cleaned)
+
+
+def preprocess_cccd_pipeline(image_bgr: np.ndarray) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    """Chạy đầy đủ 7 bước tiền xử lý cho ảnh CCCD.
+
+    Returns:
+        final: ảnh nhị phân cuối cùng (đã morph + deskew) sẵn sàng cho Tesseract.
+        intermediates: dict các ảnh trung gian từng bước (để log/preview).
+    """
+    intermediates: Dict[str, np.ndarray] = {}
+
+    # Bước 1: Image Acquisition — ảnh đã được resize_image() trước khi gọi vào đây
+    intermediates["step1_acquire"] = image_bgr
+
+    # Bước 2: ROI Detection — phát hiện & warp về dạng phẳng đứng
+    warped = warp_perspective(image_bgr)
+    intermediates["step2_roi"] = warped.image
+
+    # Bước 3: Noise Reduction (Median blur)
+    denoised = _step3_denoise(warped.image)
+    intermediates["step3_denoise"] = denoised
+
+    # Bước 4: Uniformity Correction / Flat-Fielding
+    uniform = _step4_flat_field(denoised)
+    intermediates["step4_flatfield"] = uniform
+
+    # Bước 5: Local Adaptive Thresholding
+    binary = _step5_adaptive_threshold(uniform)
+    intermediates["step5_threshold"] = binary
+
+    # Bước 6: Morphological Refinement & Cleanup
+    refined = _step6_morphology(binary)
+    intermediates["step6_morphology"] = refined
+
+    # Bước 7: Skew Correction (deskew nhẹ — warp đã làm phẳng nhưng dòng chữ
+    # vẫn có thể nghiêng nhỏ do biến dạng phôi thẻ)
+    final = _deskew(refined, max_angle=8.0)
+    intermediates["step7_skew_correct"] = final
+
+    return final, intermediates
+
+
+def ocr_cccd(roi_image: np.ndarray) -> tuple[str, List[Dict[str, Any]]]:
+    """OCR cho ảnh CCCD đã warp về ROI.
+
+    Nhận ảnh ROI (BGR hoặc xám) — KHÔNG phải ảnh nhị phân đã morphology.
+    Lý do đổi cách làm: nhị phân hóa + morphology 2×2 phá hỏng dấu tiếng Việt
+    và thiếu upscale làm chữ quá nhỏ → Tesseract đọc ra rác.
+
+    Dùng ensemble (nhiều biến thể tiền xử lý nhẹ × nhiều PSM), gộp dòng theo
+    confidence cao nhất — robust hơn nhiều so với 1 lần PSM 6.
+    """
+    # PSM 6 (uniform block) + PSM 4 (single column) — hợp với layout 2 cột của CCCD
+    blocks = ocr_ensemble(roi_image, psms=(6, 4))
+    # blocks đã được sort theo (y, x) trong _dedupe_lines → text đúng thứ tự trên→dưới
+    lines = [line for b in blocks for line in b.get("lines", [])]
+    raw_text = "\n".join(l["text"] for l in lines).strip()
+    return raw_text, blocks
 
 
 # ─── QR Detection ────────────────────────────────────────────────────────────
@@ -834,4 +976,196 @@ def extract_student_info(
         "student_id": student_id,
         "student_id_candidates": mssv_cands,
         "email": email_match.group(0) if email_match else None,
+    }
+
+
+# ─── CCCD VN extraction ─────────────────────────────────────────────────────
+
+# Số CCCD: 12 chữ số (CCCD mới gắn chip) hoặc 9 chữ số (CMND cũ)
+_CCCD_NUMBER_RE = re.compile(r"\b(\d{12}|\d{9})\b")
+
+# Ngày dd/mm/yyyy hoặc dd-mm-yyyy, dd.mm.yyyy
+_DATE_RE = re.compile(r"\b(\d{1,2}[/\-.\s]\d{1,2}[/\-.\s]\d{4})\b")
+
+
+def _normalize_date(s: str | None) -> str | None:
+    if not s:
+        return None
+    m = re.match(r"(\d{1,2})[/\-.\s](\d{1,2})[/\-.\s](\d{4})", s.strip())
+    if not m:
+        return s.strip()
+    d, mo, y = m.groups()
+    return f"{int(d):02d}/{int(mo):02d}/{y}"
+
+
+def _line_after_label(text: str, label_pattern: str, *, multiline: bool = False) -> str | None:
+    """Trả về phần text NGAY SAU label trên 1 hoặc nhiều dòng.
+
+    label_pattern: chuỗi regex bắt label (vd: r"Họ và tên|Full\s*name").
+    multiline: nếu True, lấy luôn dòng kế tiếp nếu giá trị tràn xuống.
+    """
+    flags = re.IGNORECASE
+    rx = re.compile(rf"(?:{label_pattern})\s*[:\-]?\s*(.+)", flags)
+    lines = text.split("\n")
+    for i, ln in enumerate(lines):
+        m = rx.search(ln)
+        if not m:
+            continue
+        value = m.group(1).strip()
+        if multiline and i + 1 < len(lines):
+            nxt = lines[i + 1].strip()
+            # Dòng kế tiếp được nối vào nếu nó KHÔNG bắt đầu bằng 1 label CCCD khác
+            if nxt and not re.search(
+                r"(Họ|Full|Ngày|Date|Giới|Sex|Quốc|Nationality|"
+                r"Quê|Place|Nơi|Residence|Có giá|Expiry|Số|No\.?)",
+                nxt,
+                re.IGNORECASE,
+            ):
+                value = f"{value} {nxt}".strip()
+        return value or None
+    return None
+
+
+def extract_cccd_info(
+    raw_text: str,
+    blocks: List[Dict[str, Any]] | None = None,
+    image_height: int | None = None,
+) -> dict:
+    """Bóc các trường trên Căn cước công dân VN.
+
+    Hiểu cả nhãn tiếng Việt lẫn tiếng Anh trên CCCD mới:
+      - Số / No.
+      - Họ và tên / Full name
+      - Ngày, tháng, năm sinh / Date of birth
+      - Giới tính / Sex
+      - Quốc tịch / Nationality
+      - Quê quán / Place of origin
+      - Nơi thường trú / Place of residence
+      - Có giá trị đến / Date of expiry
+    """
+    text = fix_ocr_text(raw_text)
+
+    # ─── Số CCCD: ưu tiên 12 chữ số (CCCD gắn chip) trước 9 chữ số (CMND cũ) ──
+    cccd_number = None
+    cands = _CCCD_NUMBER_RE.findall(text)
+    if cands:
+        twelve = [c for c in cands if len(c) == 12]
+        nine = [c for c in cands if len(c) == 9]
+        cccd_number = (twelve or nine)[0]
+
+    # ─── Họ và tên: uàu tin label, fallback spatial scan ──
+    full_name = None
+    raw_name = _line_after_label(text, r"Họ\s+và\s+tên|Họ\s+tên|Full\s*name")
+    if raw_name:
+        # CCCD tên thường ALL CAPS → chỉ lấy cụm 2..5 từ ALL CAPS đầu
+        m = re.search(rf"({_NAME_WORD_UPPER}(?:\s+{_NAME_WORD_UPPER}){{1,4}})", raw_name)
+        if m:
+            full_name = _title_case_vn(m.group(1))
+        else:
+            # Trường hợp title-case
+            m2 = re.search(rf"({_NAME_WORD_TITLE}(?:\s+{_NAME_WORD_TITLE}){{1,4}})", raw_name)
+            if m2:
+                full_name = m2.group(1)
+
+    if not full_name and blocks and image_height:
+        # Fallback: scoring spatial như student card
+        best_score = -1.0
+        for blk in blocks:
+            for line in blk.get("lines", []):
+                line_text = fix_ocr_text(line.get("text", ""))
+                line_conf = line.get("conf", 0.0)
+                bbox = line.get("bbox", [0, 0, 0, 0])
+                y_center = (bbox[1] + bbox[3]) / 2.0
+                y_norm = y_center / max(image_height, 1)
+                for cand in _iter_name_candidates(line_text):
+                    sc = _score_name_candidate(cand, y_norm, line_conf)
+                    if sc > best_score:
+                        best_score = sc
+                        full_name = cand
+        if full_name and full_name.isupper():
+            full_name = _title_case_vn(full_name)
+
+    # ─── Ngày sinh ──
+    birth_raw = _line_after_label(
+        text, r"Ngày[,\s]*tháng[,\s]*năm\s+sinh|Ngày\s+sinh|Date\s+of\s+birth|DOB"
+    )
+    birth_date = None
+    if birth_raw:
+        m = _DATE_RE.search(birth_raw)
+        if m:
+            birth_date = _normalize_date(m.group(1))
+    if not birth_date:
+        # fallback: lấy date đầu tiên trong text (CCCD thường có 2 date: sinh + hết hạn)
+        all_dates = _DATE_RE.findall(text)
+        if all_dates:
+            birth_date = _normalize_date(all_dates[0])
+
+    # ─── Giới tính ──
+    sex_raw = _line_after_label(text, r"Giới\s+tính|Sex")
+    sex = None
+    if sex_raw:
+        if re.search(r"\bNam\b|\bMale\b|\bM\b", sex_raw, re.IGNORECASE):
+            sex = "Nam"
+        elif re.search(r"\bNữ\b|\bFemale\b|\bF\b", sex_raw, re.IGNORECASE):
+            sex = "Nữ"
+
+    # ─── Quốc tịch ──
+    nationality_raw = _line_after_label(text, r"Quốc\s+tịch|Nationality")
+    nationality = None
+    if nationality_raw:
+        # Bỏ các ký tự rác, lấy đến dấu xuống dòng/label kế
+        m = re.match(r"([A-Za-zÀ-ỹ\s]+)", nationality_raw)
+        if m:
+            nationality = m.group(1).strip()
+        # Mặc định: nếu có từ "Việt Nam" trong text
+        if not nationality and re.search(r"Việt\s+Nam|Vietnam", text, re.IGNORECASE):
+            nationality = "Việt Nam"
+
+    # ─── Quê quán ──
+    hometown = _line_after_label(
+        text, r"Quê\s+quán|Place\s+of\s+origin|Nguyên\s+quán", multiline=True
+    )
+
+    # ─── Nơi thường trú ──
+    residence = _line_after_label(
+        text, r"Nơi\s+thường\s+trú|Place\s+of\s+residence|Thường\s+trú",
+        multiline=True,
+    )
+
+    # ─── Có giá trị đến ──
+    expiry_raw = _line_after_label(
+        text, r"Có\s+giá\s+trị\s+đến|Date\s+of\s+expiry|Expiry"
+    )
+    expiry = None
+    if expiry_raw:
+        m = _DATE_RE.search(expiry_raw)
+        if m:
+            expiry = _normalize_date(m.group(1))
+    if not expiry:
+        # fallback: date cuối cùng trong text nếu khác birth_date
+        all_dates = _DATE_RE.findall(text)
+        norm_all = [_normalize_date(d) for d in all_dates]
+        if birth_date and birth_date in norm_all:
+            others = [d for d in norm_all if d != birth_date]
+            if others:
+                expiry = others[-1]
+
+    # Họ tên: giữ ALL CAPS theo đặc tả output JSON
+    ho_va_ten = full_name.upper() if full_name else None
+
+    # Địa chỉ: ưu tiên Nơi thường trú, fallback Quê quán
+    dia_chi = residence or hometown
+
+    return {
+        # ─ Schema chính theo đặc tả nghiệp vụ (4 trường tiếng Việt) ─
+        "ho_va_ten": ho_va_ten,
+        "so_cccd": cccd_number,
+        "ngay_sinh": birth_date,
+        "dia_chi": dia_chi,
+        # ─ Các trường phụ (giữ để matching + lịch sử) ─
+        "sex": sex,
+        "nationality": nationality,
+        "hometown": hometown,
+        "residence": residence,
+        "expiry": expiry,
     }

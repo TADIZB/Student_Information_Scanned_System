@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import auth as auth_router
-from .routers import export as export_router
 from .routers import history as history_router
+from .routers import profile as profile_router
 from .routers import scan as scan_router
 from .routers import students as students_router
 
@@ -34,10 +34,10 @@ app.add_middleware(
 
 
 app.include_router(auth_router.router)
+app.include_router(profile_router.router)
 app.include_router(students_router.router)
 app.include_router(scan_router.router)
 app.include_router(history_router.router)
-app.include_router(export_router.router)
 
 
 @app.get("/health")

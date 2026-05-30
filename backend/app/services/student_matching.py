@@ -74,6 +74,92 @@ def _match_student(
     return None, ""
 
 
+def _normalize_birth_for_compare(b: str | None) -> str | None:
+    """Chuẩn hoá ngày sinh về dd/mm/yyyy để so sánh (DB có thể lưu yyyy-mm-dd hoặc dd/mm/yyyy)."""
+    if not b:
+        return None
+    s = b.strip()
+    import re
+    m = re.match(r"^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$", s)
+    if m:
+        y, mo, d = m.groups()
+        return f"{int(d):02d}/{int(mo):02d}/{y}"
+    m = re.match(r"^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$", s)
+    if m:
+        d, mo, y = m.groups()
+        return f"{int(d):02d}/{int(mo):02d}/{y}"
+    return s
+
+
+def _match_student_by_cccd(
+    db: DBSession,
+    full_name: str | None,
+    birth_date: str | None,
+) -> tuple[Student | None, str]:
+    """Tra cứu sinh viên từ thông tin CCCD bằng full_name + birth_date.
+
+    Chiến lược (ưu tiên giảm dần):
+    1. Khớp họ tên (fuzzy ≥ 86%) VÀ ngày sinh trùng (chuẩn hoá format) → match cao.
+    2. Khớp họ tên không dấu (fuzzy ≥ 90%) VÀ ngày sinh trùng.
+    3. Chỉ khớp tên fuzzy ≥ 90% (không có ngày sinh) → match yếu.
+    """
+    if not (full_name and full_name.strip()):
+        return None, ""
+
+    try:
+        from rapidfuzz import fuzz
+    except ImportError:
+        return None, ""
+
+    name_lc = full_name.lower().strip()
+    name_stripped_lc = _strip_diacritics(full_name).lower().strip()
+    target_birth = _normalize_birth_for_compare(birth_date)
+
+    students = db.query(Student).filter(Student.full_name.isnot(None)).all()
+    best: tuple[Student, int, str] | None = None  # (student, score, note)
+
+    for s in students:
+        if not s.full_name:
+            continue
+        db_lc = s.full_name.lower().strip()
+        db_stripped_lc = _strip_diacritics(s.full_name).lower().strip()
+        s_birth = _normalize_birth_for_compare(s.birth_date)
+
+        sc_dia = fuzz.token_set_ratio(name_lc, db_lc)
+        sc_strip = fuzz.token_set_ratio(name_stripped_lc, db_stripped_lc)
+
+        birth_match = bool(target_birth and s_birth and target_birth == s_birth)
+
+        # Strategy 1: tên có dấu cao + birth khớp
+        if sc_dia >= 86 and birth_match:
+            score = sc_dia + 10  # bonus cho birth khớp
+            note = f"khớp tên có dấu ({sc_dia}%) + ngày sinh"
+            if best is None or score > best[1]:
+                best = (s, score, note)
+                continue
+
+        # Strategy 2: tên không dấu cao + birth khớp
+        if sc_strip >= 90 and birth_match:
+            score = sc_strip + 5
+            note = f"khớp tên không dấu ({sc_strip}%) + ngày sinh"
+            if best is None or score > best[1]:
+                best = (s, score, note)
+                continue
+
+        # Strategy 3: chỉ tên (yếu hơn nếu không có birth để xác nhận)
+        if not target_birth:
+            if sc_dia >= 90:
+                if best is None or sc_dia > best[1]:
+                    best = (s, sc_dia, f"khớp tên có dấu ({sc_dia}%)")
+            elif sc_strip >= 92:
+                if best is None or sc_strip > best[1]:
+                    best = (s, sc_strip, f"khớp tên không dấu ({sc_strip}%)")
+
+    if best:
+        return best[0], best[2]
+    return None, ""
+
+
 def _student_to_dict(s: Student, scan_id: str | None = None) -> dict:
     return {
         "full_name": s.full_name,
