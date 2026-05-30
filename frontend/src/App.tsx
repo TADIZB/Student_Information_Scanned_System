@@ -69,10 +69,12 @@ export default function App() {
   if (view === "home") {
     return (
       <Homepage
+        username={username}
         onLoginClick={() => { setAuthMode("login"); setShowAuth(true); }}
         onRegisterClick={() => { setAuthMode("register"); setShowAuth(true); }}
         onQrClick={() => { setTab("qr"); setView("app"); }}
         onOcrClick={() => { setTab("ocr"); setView("app"); }}
+        onLogoutClick={handleLogout}
       />
     );
   }
