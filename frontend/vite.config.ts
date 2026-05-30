@@ -24,7 +24,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
-      devOptions: { enabled: true },   // bật service worker trong dev mode
+      devOptions: { enabled: false },  // tắt SW trong dev — tránh chặn cookie auth qua proxy
       manifest: {
         name: "TADIZB Scanner",
         short_name: "TADIZB",

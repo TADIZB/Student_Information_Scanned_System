@@ -1,7 +1,11 @@
 import React, { FormEvent, useEffect, useRef, useState } from "react";
-import { googleLogin, googleRegister, login, register } from "../api";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
+import { login, registerHust, registerLocal } from "../api";
 
 type Mode = "login" | "register";
+type RegisterKind = "hust" | "local";
+type ToastKind = "success" | "error";
 
 interface Props {
   onLogin: () => void;
@@ -9,273 +13,575 @@ interface Props {
   onBack?: () => void;
 }
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const HUST_DOMAIN = "@sis.hust.edu.vn";
+const HUST_EMAIL_RE = /^[A-Za-z0-9._%+-]+@sis\.hust\.edu\.vn$/i;
+const USERNAME_RE = /^[A-Za-z0-9._-]{3,50}$/;
 
-declare global {
-  interface Window {
-    google?: any;
-  }
-}
+const COMMON_PASSWORDS = new Set([
+  "123456", "password", "12345678", "qwerty", "abc123", "111111", "123123",
+  "admin", "letmein", "welcome", "password1", "iloveyou", "000000", "matkhau",
+  "123456789", "1234567890", "12345", "1q2w3e4r", "p@ssw0rd",
+]);
+
+// ─── Icons (inline SVG) ──────────────────────────────────────────────────
+const IconEye = ({ off }: { off?: boolean }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    {off ? (
+      <>
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </>
+    ) : (
+      <>
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    )}
+  </svg>
+);
+const IconCheck = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+const IconAlert = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="12" />
+    <line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+const IconCalendar = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="4" width="18" height="18" rx="3" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
 
 export default function Login({ onLogin, initialMode = "login", onBack }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [registerKind, setRegisterKind] = useState<RegisterKind>("hust");
+
+  // Form fields
   const [identifier, setIdentifier] = useState("");
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+
+  // UX state
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{ kind: ToastKind; msg: string } | null>(null);
 
-  // Google OAuth token client (khởi tạo 1 lần)
-  const tokenClientRef = useRef<any>(null);
-  // Lưu mode đang yêu cầu Google: callback sẽ đọc giá trị này
-  const pendingModeRef = useRef<Mode>(initialMode);
+  // Popup lịch
+  const [showCalendar, setShowCalendar] = useState(false);
 
+  // Auto focus đúng input khi switch tab/kind
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    firstFieldRef.current?.focus();
+  }, [mode, registerKind]);
+
+  // Toast auto-dismiss
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Khi popup lịch mở: chặn scroll body + Esc đóng
+  useEffect(() => {
+    if (!showCalendar) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowCalendar(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [showCalendar]);
+
+  // ─── Validation realtime ─────────────────────────────────────────────────
+  const v = {
+    identifier: identifier.trim().length > 0,
+    email: HUST_EMAIL_RE.test(email.trim()),
+    username: USERNAME_RE.test(username.trim()),
+    password: password.length >= 6 && !COMMON_PASSWORDS.has(password.toLowerCase()),
+    confirm: confirm.length > 0 && confirm === password,
+    birthDate: birthDate.trim() === "" || !!parseBirthDate(birthDate),
+  };
+
+  // ─── Password strength ───────────────────────────────────────────────────
+  const passwordStrength = (pw: string) => {
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+    if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) score++;
+    const labels = ["Rất yếu", "Yếu", "Trung bình", "Mạnh", "Rất mạnh"] as const;
+    const colors = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#16a34a"];
+    return { score, label: labels[score], color: colors[score] };
+  };
+
+  function parseBirthDate(s: string): string | null {
+    const m = s.trim().match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+    if (!m) return null;
+    const d = +m[1], mo = +m[2], y = +m[3];
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    const dt = new Date(y, mo - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  // Ngày đang chọn — parse từ ô text để DayPicker highlight
+  const selectedDate: Date | undefined = (() => {
+    const iso = parseBirthDate(birthDate);
+    if (!iso) return undefined;
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  })();
+
+  const handleDaySelect = (d: Date | undefined) => {
+    if (!d) return;
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    setBirthDate(`${dd}/${mm}/${d.getFullYear()}`);
+    setTouched((t) => ({ ...t, birthDate: true }));
+    setShowCalendar(false);
+  };
+
+  // ─── Switchers ───────────────────────────────────────────────────────────
   const switchMode = (m: Mode) => {
     setMode(m);
-    setError("");
-    setSuccess("");
     setPassword("");
     setConfirm("");
+    setTouched({});
+    setToast(null);
+  };
+  const switchKind = (k: RegisterKind) => {
+    setRegisterKind(k);
+    setTouched({});
+    setToast(null);
   };
 
-  // ─── Khởi tạo Google Identity Services (1 lần) ────────────────────────────
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.oauth2) return;
+  const touch = (name: string) => setTouched((t) => ({ ...t, [name]: true }));
 
-    tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: "openid email profile",
-      callback: async (resp: { access_token?: string; error?: string }) => {
-        if (!resp.access_token) {
-          setError("Không lấy được access token từ Google.");
-          return;
-        }
-        setError("");
-        setSuccess("");
-        setLoading(true);
-        try {
-          if (pendingModeRef.current === "register") {
-            const data = await googleRegister(resp.access_token);
-            if (data.already_existed) {
-              setSuccess("Tài khoản Google đã tồn tại, đang đăng nhập...");
-            }
-          } else {
-            await googleLogin(resp.access_token);
-          }
-          onLogin();
-        } catch (err: any) {
-          setError(err?.response?.data?.detail || "Xác thực Google thất bại.");
-        } finally {
-          setLoading(false);
-        }
-      },
-    });
-  }, [onLogin]);
-
-  const handleGoogleClick = (target: Mode) => {
-    if (!tokenClientRef.current) {
-      setError("Google chưa sẵn sàng. Vui lòng tải lại trang.");
-      return;
-    }
-    pendingModeRef.current = target;
-    setError("");
-    tokenClientRef.current.requestAccessToken({ prompt: "consent" });
+  // Caps lock detect
+  const handleCapsCheck = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLock(e.getModifierState && e.getModifierState("CapsLock"));
   };
 
+  // ─── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    setToast(null);
 
-    if (mode === "register") {
-      if (password !== confirm) {
-        setError("Mật khẩu xác nhận không khớp.");
+    if (mode === "login") {
+      if (!v.identifier) {
+        setToast({ kind: "error", msg: "Vui lòng nhập tài khoản." });
+        touch("identifier");
         return;
       }
-      if (password.length < 6) {
-        setError("Mật khẩu phải có ít nhất 6 ký tự.");
-        return;
+      setLoading(true);
+      try {
+        await login(identifier.trim(), password);
+        setToast({ kind: "success", msg: "Đăng nhập thành công." });
+        onLogin();
+      } catch (err: any) {
+        setToast({ kind: "error", msg: err?.response?.data?.detail || "Sai tài khoản hoặc mật khẩu." });
+      } finally {
+        setLoading(false);
       }
+      return;
+    }
+
+    // Register validations
+    if (!v.password) {
+      setToast({ kind: "error", msg: "Mật khẩu chưa đạt yêu cầu (≥6 ký tự, không phổ biến)." });
+      touch("password");
+      return;
+    }
+    if (!v.confirm) {
+      setToast({ kind: "error", msg: "Mật khẩu xác nhận không khớp." });
+      touch("confirm");
+      return;
     }
 
     setLoading(true);
     try {
-      if (mode === "login") {
-        await login(identifier, password);
-        onLogin();
-      } else {
-        await register({
-          username,
+      if (registerKind === "hust") {
+        if (!v.email) {
+          setToast({ kind: "error", msg: `Email phải có đuôi ${HUST_DOMAIN}.` });
+          touch("email");
+          setLoading(false);
+          return;
+        }
+        await registerHust({
+          email: email.trim(),
           password,
-          email: email.trim() || undefined,
           full_name: fullName.trim() || undefined,
         });
-        setSuccess("Đăng ký thành công! Hãy đăng nhập.");
-        switchMode("login");
-      }
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      if (mode === "login") {
-        setError(detail || "Sai tên đăng nhập hoặc mật khẩu.");
       } else {
-        setError(detail || "Đăng ký thất bại. Vui lòng thử lại.");
+        if (!v.username) {
+          setToast({ kind: "error", msg: "Tên đăng nhập 3-50 ký tự, chỉ chữ/số/._-" });
+          touch("username");
+          setLoading(false);
+          return;
+        }
+        if (!v.birthDate) {
+          setToast({ kind: "error", msg: "Ngày sinh không hợp lệ. Format: dd/mm/yyyy." });
+          touch("birthDate");
+          setLoading(false);
+          return;
+        }
+        let bdate: string | undefined;
+        if (birthDate.trim()) {
+          bdate = parseBirthDate(birthDate) || undefined;
+        }
+        await registerLocal({
+          username: username.trim(),
+          password,
+          full_name: fullName.trim() || undefined,
+          birth_date: bdate,
+        });
       }
+      setToast({ kind: "success", msg: "Đăng ký thành công." });
+      onLogin();
+    } catch (err: any) {
+      setToast({ kind: "error", msg: err?.response?.data?.detail || "Đăng ký thất bại." });
     } finally {
       setLoading(false);
     }
   };
 
-  // Icon Google (SVG inline)
-  const GoogleIcon = () => (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
-      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.5-4.5 2.4-7.2 2.4-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.6 39.6 16.3 44 24 44z"/>
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.2 5.2C40.6 36 44 30.5 44 24c0-1.3-.1-2.4-.4-3.5z"/>
-    </svg>
-  );
+  // ─── Helpers UI ──────────────────────────────────────────────────────────
+  const fieldClass = (name: keyof typeof v, value: string) => {
+    const valid = v[name];
+    const isTouched = touched[name];
+    let cls = "field-floating";
+    if (value) cls += " has-value";
+    if (isTouched && !valid) cls += " is-invalid";
+    if (isTouched && valid && value) cls += " is-valid";
+    return cls;
+  };
+  const renderStatusIcon = (name: keyof typeof v, value: string) => {
+    if (!value) return null;
+    const valid = v[name];
+    if (!touched[name]) return null;
+    return (
+      <span className={`field-icon ${valid ? "field-icon-valid" : "field-icon-invalid"}`} style={{ right: 12 }}>
+        {valid ? <IconCheck /> : <IconAlert />}
+      </span>
+    );
+  };
+
+  const s = passwordStrength(password);
 
   return (
     <div className="login-page">
-      <div className="login-card">
-        {onBack && (
-          <button type="button" className="login-back ghost" onClick={onBack}>
-            ← Trang chủ
-          </button>
-        )}
-        <div className="brand login-brand">
-          <span className="brand-mark" />
-          <h1>TADIZB</h1>
-        </div>
-        <p className="login-subtitle">Hệ thống quét thẻ thông minh</p>
+      <div className="login-shell">
+        {/* Hero panel */}
+        <aside className="login-hero" aria-hidden="true">
+          <h2>Quét &amp; nhận dạng<br/>thẻ sinh viên</h2>
+          <p>Hệ thống TADIZB Scanner — QR · OCR · đối chiếu DB sinh viên.</p>
+        </aside>
 
-        <div className="auth-tabs">
-          <button
-            type="button"
-            className={`auth-tab${mode === "login" ? " active" : ""}`}
-            onClick={() => switchMode("login")}
-          >
-            Đăng nhập
-          </button>
-          <button
-            type="button"
-            className={`auth-tab${mode === "register" ? " active" : ""}`}
-            onClick={() => switchMode("register")}
-          >
-            Đăng ký
-          </button>
-        </div>
+        {/* Form panel */}
+        <div className="login-card">
+          {onBack && (
+            <button type="button" className="login-back ghost" onClick={onBack}>
+              ← Trang chủ
+            </button>
+          )}
+          <div className="brand login-brand">
+            <span className="brand-mark" />
+            <h1>TADIZB</h1>
+          </div>
+          <p className="login-subtitle">Hệ thống nhận dạng thẻ sinh viên</p>
 
-        {/* ─── LUỒNG 1: Username / Password ─── */}
-        <form onSubmit={handleSubmit} className="login-form">
-          {mode === "login" ? (
-            <div className="field">
-              <label htmlFor="identifier">Tên đăng nhập hoặc Email</label>
-              <input
-                id="identifier"
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="username hoặc email@example.com"
-                required
-                autoFocus
-              />
+          <div className="auth-tabs">
+            <button type="button" className={`auth-tab${mode === "login" ? " active" : ""}`} onClick={() => switchMode("login")}>
+              Đăng nhập
+            </button>
+            <button type="button" className={`auth-tab${mode === "register" ? " active" : ""}`} onClick={() => switchMode("register")}>
+              Đăng ký
+            </button>
+          </div>
+
+          {mode === "register" && (
+            <div className="auth-tabs auth-subtabs">
+              <button type="button" className={`auth-tab${registerKind === "hust" ? " active" : ""}`} onClick={() => switchKind("hust")}>
+                Tài khoản trường
+              </button>
+              <button type="button" className={`auth-tab${registerKind === "local" ? " active" : ""}`} onClick={() => switchKind("local")}>
+                Tài khoản thường
+              </button>
             </div>
-          ) : (
-            <>
-              <div className="field">
-                <label htmlFor="username">Tên đăng nhập</label>
+          )}
+
+          <form
+            onSubmit={handleSubmit}
+            className="login-form auth-pane"
+            key={`${mode}-${registerKind}`} /* trigger re-mount → animation chạy lại */
+          >
+            {/* ── Identity field ── */}
+            {mode === "login" ? (
+              <div className={fieldClass("identifier", identifier)}>
                 <input
-                  id="username"
+                  ref={firstFieldRef}
+                  id="identifier"
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Nhập tên đăng nhập"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  onBlur={() => touch("identifier")}
+                  placeholder=" "
                   required
-                  autoFocus
+                  autoComplete="username"
                 />
+                <label htmlFor="identifier">Tài khoản (email {HUST_DOMAIN} hoặc tên đăng nhập)</label>
+                {renderStatusIcon("identifier", identifier)}
               </div>
-              <div className="field">
-                <label htmlFor="email">Email (tuỳ chọn)</label>
+            ) : registerKind === "hust" ? (
+              <div className={fieldClass("email", email)}>
                 <input
+                  ref={firstFieldRef}
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@example.com"
+                  onBlur={() => touch("email")}
+                  placeholder=" "
+                  required
+                  autoComplete="email"
                 />
+                <label htmlFor="email">Email trường ({HUST_DOMAIN})</label>
+                {renderStatusIcon("email", email)}
+                {touched.email && email && !v.email && (
+                  <div className="field-hint err">Email phải có đuôi {HUST_DOMAIN}.</div>
+                )}
               </div>
-              <div className="field">
-                <label htmlFor="fullName">Họ và tên (tuỳ chọn)</label>
+            ) : (
+              <div className={fieldClass("username", username)}>
                 <input
-                  id="fullName"
+                  ref={firstFieldRef}
+                  id="username"
                   type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Nguyễn Văn A"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onBlur={() => touch("username")}
+                  placeholder=" "
+                  required
+                  autoComplete="username"
                 />
+                <label htmlFor="username">Tên đăng nhập</label>
+                {renderStatusIcon("username", username)}
+                {touched.username && username && !v.username && (
+                  <div className="field-hint err">3-50 ký tự, chỉ chữ/số/._-</div>
+                )}
               </div>
-            </>
-          )}
+            )}
 
-          <div className="field">
-            <label htmlFor="password">Mật khẩu</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
+            {/* ── Họ và tên + Ngày sinh (chỉ ở register) ── */}
+            {mode === "register" && (
+              <>
+                <div className={`field-floating${fullName ? " has-value" : ""}`}>
+                  <input
+                    id="fullName"
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder=" "
+                    autoComplete="name"
+                  />
+                  <label htmlFor="fullName">Họ và tên</label>
+                </div>
+
+                {registerKind === "local" && (
+                  <div className={fieldClass("birthDate", birthDate)}>
+                    <input
+                      id="birthDate"
+                      type="text"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      onBlur={() => touch("birthDate")}
+                      placeholder=" "
+                      inputMode="numeric"
+                      style={{ paddingRight: 42 }}
+                    />
+                    <label htmlFor="birthDate">Ngày sinh (dd/mm/yyyy)</label>
+                    <span className="field-icon">
+                      <button
+                        type="button"
+                        className="field-icon-btn"
+                        onClick={() => setShowCalendar(true)}
+                        title="Chọn từ lịch"
+                        aria-label="Mở lịch chọn ngày"
+                      >
+                        <IconCalendar />
+                      </button>
+                    </span>
+                    {touched.birthDate && birthDate && !v.birthDate && (
+                      <div className="field-hint err">Định dạng đúng: dd/mm/yyyy.</div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Password ── */}
+            <div className={fieldClass("password", password)}>
+              <input
+                id="password"
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => touch("password")}
+                onKeyDown={handleCapsCheck}
+                onKeyUp={handleCapsCheck}
+                placeholder=" "
+                required
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                style={{ paddingRight: 42 }}
+              />
+              <label htmlFor="password">Mật khẩu</label>
+              <span className="field-icon">
+                <button
+                  type="button"
+                  className="field-icon-btn"
+                  onClick={() => setShowPw((s) => !s)}
+                  title={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  aria-label={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                >
+                  <IconEye off={showPw} />
+                </button>
+              </span>
+              {capsLock && (
+                <div className="field-hint warn">
+                  <IconAlert /> Caps Lock đang bật.
+                </div>
+              )}
+              {mode === "register" && password && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ height: 4, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
+                    <div style={{
+                      width: `${(s.score / 4) * 100}%`,
+                      height: "100%",
+                      background: s.color,
+                      transition: "width 0.25s, background 0.25s",
+                    }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: s.color, marginTop: 4, fontWeight: 600 }}>
+                    Độ mạnh: {s.label}
+                  </div>
+                </div>
+              )}
+              {touched.password && password && !v.password && (
+                <div className="field-hint err">≥ 6 ký tự và không nằm trong danh sách phổ biến.</div>
+              )}
+            </div>
+
+            {/* ── Confirm password ── */}
+            {mode === "register" && (
+              <div className={fieldClass("confirm", confirm)}>
+                <input
+                  id="confirm"
+                  type={showConfirmPw ? "text" : "password"}
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  onBlur={() => touch("confirm")}
+                  placeholder=" "
+                  required
+                  autoComplete="new-password"
+                  style={{ paddingRight: 42 }}
+                />
+                <label htmlFor="confirm">Xác nhận mật khẩu</label>
+                <span className="field-icon">
+                  <button
+                    type="button"
+                    className="field-icon-btn"
+                    onClick={() => setShowConfirmPw((s) => !s)}
+                    title={showConfirmPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    aria-label={showConfirmPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  >
+                    <IconEye off={showConfirmPw} />
+                  </button>
+                </span>
+                {touched.confirm && confirm && !v.confirm && (
+                  <div className="field-hint err">Mật khẩu xác nhận không khớp.</div>
+                )}
+              </div>
+            )}
+
+            <button type="submit" className="primary full-width" disabled={loading} style={{ marginTop: 6 }}>
+              {loading && <span className="btn-spinner" />}
+              {loading
+                ? mode === "login" ? "Đang đăng nhập..." : "Đang đăng ký..."
+                : mode === "login" ? "Đăng nhập" : "Đăng ký"}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className={`toast ${toast.kind}`} role="status" onClick={() => setToast(null)}>
+          {toast.kind === "success" ? <IconCheck /> : <IconAlert />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
+      {/* Modal lịch */}
+      {showCalendar && (
+        <>
+          <div
+            className="modal-backdrop"
+            onClick={() => setShowCalendar(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(15,20,44,0.4)", zIndex: 999 }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal-pop"
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 1000,
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 18,
+              boxShadow: "0 24px 60px rgba(15,20,44,0.32)",
+              padding: 14,
+              maxHeight: "90vh",
+              maxWidth: "calc(100vw - 24px)",
+              overflow: "auto",
+            }}
+          >
+            <DayPicker
+              mode="single"
+              selected={selectedDate}
+              onSelect={handleDaySelect}
+              defaultMonth={selectedDate}
+              captionLayout="dropdown"
+              startMonth={new Date(1900, 0)}
+              endMonth={new Date(new Date().getFullYear(), 11)}
+              showOutsideDays
             />
           </div>
-
-          {mode === "register" && (
-            <div className="field">
-              <label htmlFor="confirm">Xác nhận mật khẩu</label>
-              <input
-                id="confirm"
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </div>
-          )}
-
-          {error   && <p className="login-error">{error}</p>}
-          {success && <p className="login-success">{success}</p>}
-
-          <button type="submit" className="primary full-width" disabled={loading}>
-            {loading
-              ? mode === "login" ? "Đang đăng nhập..." : "Đang đăng ký..."
-              : mode === "login" ? "Đăng nhập" : "Đăng ký"}
-          </button>
-        </form>
-
-        {/* ─── LUỒNG 2: Google OAuth ─── */}
-        {GOOGLE_CLIENT_ID && (
-          <>
-            <div className="auth-divider"><span>hoặc</span></div>
-            <button
-              type="button"
-              className="google-btn full-width"
-              onClick={() => handleGoogleClick(mode)}
-              disabled={loading}
-            >
-              <GoogleIcon />
-              <span>
-                {mode === "login" ? "Đăng nhập bằng Google" : "Đăng ký bằng Google"}
-              </span>
-            </button>
-          </>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

@@ -3,63 +3,26 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text, Uuid
 
 from .database import Base
 
 
 class User(Base):
-    """Bảng users – tài khoản đăng nhập (hỗ trợ local + OAuth)."""
+    """Bảng users – tài khoản đăng nhập bằng email @hust.edu.vn HOẶC username thường.
+
+    DB ràng buộc CHECK (username IS NOT NULL OR email IS NOT NULL) để đảm bảo
+    có ít nhất một định danh.
+    """
 
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(100), unique=True, nullable=True)        # nullable: user Google có thể không có
-    password_hash = Column(String(255), nullable=True)                # nullable: user OAuth không có mật khẩu
+    id = Column(Uuid(), primary_key=True, default=uuid.uuid4)
+    username = Column(String(100), unique=True, nullable=True)
+    password_hash = Column(String(255), nullable=False)
     email = Column(String(200), unique=True, nullable=True)
     full_name = Column(String(200), nullable=True)
-    avatar_url = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class UserIdentity(Base):
-    """Bảng user_identities – liên kết provider OAuth với user."""
-
-    __tablename__ = "user_identities"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    provider = Column(String(20), nullable=False)        # 'google' | 'local' | ...
-    provider_uid = Column(String(255), nullable=False)   # Google "sub"
-    email = Column(String(200), nullable=True)
-    access_token = Column(Text, nullable=True)
-    refresh_token = Column(Text, nullable=True)
-    token_expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class Session(Base):
-    """Bảng sessions – legacy (giữ schema cũ, không dùng từ khi chuyển sang JWT)."""
-
-    __tablename__ = "sessions"
-
-    session_id = Column(String(64), primary_key=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=False)
-
-
-class RefreshToken(Base):
-    """Bảng refresh_tokens – lưu hash của refresh token (rotate + revoke được)."""
-
-    __tablename__ = "refresh_tokens"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    token_hash = Column(String(64), unique=True, nullable=False, index=True)   # SHA-256 hex (64 ký tự)
-    expires_at = Column(DateTime, nullable=False)
-    revoked_at = Column(DateTime, nullable=True)
+    birth_date = Column(String(20), nullable=True)   # yyyy-mm-dd hoặc dd/mm/yyyy
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -68,7 +31,7 @@ class Student(Base):
 
     __tablename__ = "students"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(), primary_key=True, default=uuid.uuid4)
     student_id = Column(String(20), unique=True, nullable=False, index=True)  # MSSV
     full_name = Column(String(200), nullable=True)   # Họ tên / Name
     birth_date = Column(String(20), nullable=True)   # Ngày sinh / D.O.B
@@ -84,8 +47,8 @@ class ScanHistory(Base):
 
     __tablename__ = "scan_history"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Uuid(), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     image_data = Column(LargeBinary, nullable=True)     # Ảnh đã warp lưu thẳng vào DB (BYTEA)
     image_mime = Column(String(20), nullable=True)      # MIME type, thường "image/png"
     raw_text = Column(Text, nullable=True)              # Toàn bộ text OCR nhận được
@@ -93,7 +56,7 @@ class ScanHistory(Base):
     scan_type = Column(String(10), nullable=True)       # "qr" hoặc "ocr"
     match_result = Column(Integer, nullable=True)       # null=N/A, 0=không khớp, 1=khớp
     matched_student_id = Column(                        # FK tới bảng students nếu khớp
-        UUID(as_uuid=True),
+        Uuid(),
         ForeignKey("students.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -105,9 +68,9 @@ class StudentCard(Base):
 
     __tablename__ = "student_cards"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    scan_id = Column(UUID(as_uuid=True), ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Uuid(), primary_key=True, default=uuid.uuid4)
+    scan_id = Column(Uuid(), ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True)
+    user_id = Column(Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     full_name = Column(String(200), nullable=True)    # Họ tên / Name
     birth_date = Column(String(20), nullable=True)    # Ngày sinh / D.O.B (dd/mm/yyyy)
     school = Column(String(200), nullable=True)       # Trường, Viện

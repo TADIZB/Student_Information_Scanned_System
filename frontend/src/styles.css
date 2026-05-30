@@ -1450,3 +1450,333 @@ button.ghost.small {
   .ocr-steps { padding: 12px 14px; }
   .step-name { font-size: 13px; }
 }
+/* ── DayPicker (react-day-picker) custom: bo tròn các ngày ──────────────── */
+.rdp-root {
+  --rdp-accent-color: var(--accent);
+  --rdp-day-height: 36px;
+  --rdp-day-width: 36px;
+}
+.rdp-day_button {
+  border-radius: 10px;
+}
+.rdp-selected .rdp-day_button {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+}
+.rdp-today:not(.rdp-selected) .rdp-day_button {
+  color: var(--accent);
+  font-weight: 700;
+}
+.rdp-chevron { fill: var(--ink); }
+
+/* Giữ chiều cao cố định cho block lịch — đủ chứa tháng 6 hàng */
+.rdp-month_grid { min-height: calc(36px * 6 + 8px); }
+.rdp-month     { min-height: 300px; }
+
+/* ─── Login v2: layout 2 cột + glass + animations ───────────────────────── */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(900px 600px at -10% -10%, rgba(220,38,38,0.18), transparent 60%),
+    radial-gradient(800px 500px at 110% 110%, rgba(255,111,60,0.18), transparent 55%),
+    linear-gradient(180deg, #fafbfc 0%, #eef0f4 100%);
+  position: relative;
+  overflow: hidden;
+}
+.login-page::before,
+.login-page::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: 0;
+  pointer-events: none;
+}
+.login-page::before {
+  width: 320px; height: 320px;
+  background: rgba(220,38,38,0.25);
+  top: -80px; left: -80px;
+}
+.login-page::after {
+  width: 380px; height: 380px;
+  background: rgba(255,176,90,0.25);
+  bottom: -120px; right: -100px;
+}
+
+.login-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 32px;
+  width: 100%;
+  max-width: 1080px;
+}
+@media (max-width: 880px) {
+  .login-shell { grid-template-columns: 1fr; gap: 16px; }
+  .login-hero { display: none; }
+}
+
+.login-hero {
+  padding: 44px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 520px;
+  color: #fff;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(127,29,29,0.05) 0%, rgba(127,29,29,0.55) 65%, rgba(127,29,29,0.92) 100%),
+    url("/hero-scan.svg") center / cover no-repeat,
+    linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+  box-shadow: 0 24px 60px rgba(127,29,29,0.35);
+  position: relative;
+  overflow: hidden;
+}
+.login-hero h2 {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0;
+  text-shadow: 0 2px 16px rgba(0,0,0,0.4);
+}
+.login-hero p {
+  color: rgba(255,255,255,0.92);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+}
+
+.login-card {
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 28px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px rgba(15,20,44,0.12);
+  padding: 32px;
+}
+
+/* Floating label */
+.field-floating {
+  position: relative;
+  margin-bottom: 14px;
+}
+.field-floating input,
+.field-floating .fake-input {
+  width: 100%;
+  padding: 22px 14px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  font-size: 15px;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  box-sizing: border-box;
+  font-family: inherit;
+  color: var(--ink);
+}
+.field-floating input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(220,38,38,0.14);
+}
+.field-floating > label {
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  font-size: 14px;
+  color: #6b7280;
+  pointer-events: none;
+  transition: all 0.18s ease;
+  background: transparent;
+}
+.field-floating input:focus + label,
+.field-floating input:not(:placeholder-shown) + label,
+.field-floating.has-value > label {
+  top: 6px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.field-floating.is-invalid input {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239,68,68,0.12);
+}
+.field-floating.is-valid input {
+  border-color: #10b981;
+}
+.field-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.field-icon-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: color 0.15s, background 0.15s;
+}
+.field-icon-btn:hover { color: var(--accent); background: rgba(220,38,38,0.06); }
+.field-icon-valid  { color: #10b981; }
+.field-icon-invalid { color: #ef4444; }
+.field-hint {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+  margin-left: 2px;
+}
+.field-hint.err { color: #ef4444; }
+.field-hint.warn { color: #f59e0b; display: inline-flex; align-items: center; gap: 6px; }
+
+/* Auth pane fade khi chuyển tab */
+.auth-pane {
+  animation: pane-in 0.22s ease-out;
+}
+@keyframes pane-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111827;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 999px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.22);
+  font-size: 14px;
+  z-index: 2000;
+  animation: toast-in 0.25s ease-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+}
+.toast.success { background: #059669; }
+.toast.error   { background: #dc2626; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Button spinner mượt */
+.btn-spinner {
+  width: 16px; height: 16px;
+  border: 2.5px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: -3px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Modal lịch fade-in */
+.modal-backdrop { animation: backdrop-in 0.18s ease-out; }
+.modal-pop      { animation: pop-in 0.22s cubic-bezier(0.2,1.2,0.3,1.0); }
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* DayPicker brand đỏ — hover ngày */
+.rdp-day_button:hover:not([disabled]):not(.rdp-selected) {
+  background: rgba(220,38,38,0.10);
+  border-radius: 10px;
+  color: var(--accent);
+}
+.rdp-dropdown {
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 4px 6px;
+  font-size: 13px;
+  background: #fff;
+}
+.rdp-button_previous, .rdp-button_next {
+  border-radius: 10px;
+}
+.rdp-button_previous:hover, .rdp-button_next:hover {
+  background: rgba(220,38,38,0.08);
+  color: var(--accent);
+}
+
+/* ─── UI consistency cho Login: form ổn định chiều cao, sub-tabs phụ ─── */
+/* Card có chiều cao cố định đủ chứa Register-Local (kịch bản dài nhất) */
+.login-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 720px;
+  height: 720px;
+}
+.login-hero { height: 720px; min-height: 720px; }
+@media (max-width: 880px) {
+  .login-card { height: auto; min-height: 720px; }
+  .login-hero { height: auto; }
+}
+
+.login-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;            /* không cho content vượt khỏi card */
+}
+.login-form > button[type="submit"] {
+  margin-top: auto;            /* nút submit luôn dính đáy form */
+  flex-shrink: 0;
+}
+.field-floating { margin-bottom: 0; }
+
+/* Reserve chỗ cho thanh độ mạnh + caps lock + hint — không co/giãn khi ẩn/hiện */
+.field-reserve { min-height: 18px; }
+
+/* Sub-tabs (Tài khoản trường / thường) — nhỏ hơn, ít nổi bật hơn main tabs */
+.auth-subtabs {
+  background: rgba(220,38,38,0.05);
+  padding: 4px;
+  margin-top: -10px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(220,38,38,0.08);
+}
+.auth-subtabs .auth-tab {
+  font-size: 13px;
+  padding: 7px 0;
+  font-weight: 500;
+  transition: all 0.18s ease;
+}
+.auth-subtabs .auth-tab.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(220,38,38,0.30);
+  font-weight: 600;
+}
+.auth-subtabs .auth-tab:not(.active):hover {
+  color: var(--accent);
+}
+
+/* Subtitle khoảng cách đồng đều với tabs */
+.login-subtitle { margin: 0 0 22px; }

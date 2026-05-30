@@ -1,39 +1,42 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { getMe, logout } from "./api";
 import type { ScanResult } from "./api";
+import Homepage from "./pages/Homepage";
 import Login from "./pages/Login";
 import Scanner from "./pages/Scanner";
-import Homepage from "./pages/Homepage";
 
 type Tab = "qr" | "ocr";
-type View = "home" | "app";
-type AuthMode = "login" | "register";
 
-export default function App() {
-  const [username, setUsername] = useState<string | null>(null);
-  const [checking, setChecking] = useState(true);
-  const [view, setView] = useState<View>("home");
-  const [tab, setTab] = useState<Tab>("qr");
-  const [showAuth, setShowAuth] = useState(false);
-  const [authMode, setAuthMode] = useState<AuthMode>("login");
+// ─── Context để chia sẻ trạng thái auth giữa các route ─────────────────────
+interface AuthState {
+  username: string | null;
+  refresh: () => Promise<void>;
+  setUsername: (u: string | null) => void;
+}
 
-  // Tên hiển thị: ưu tiên username → full_name → email
-  const displayName = (u: { username: string | null; full_name: string | null; email: string | null }) =>
-    u.username || u.full_name || u.email;
+const AuthContext = React.createContext<AuthState>({
+  username: null,
+  refresh: async () => {},
+  setUsername: () => {},
+});
 
-  useEffect(() => {
-    getMe()
-      .then((data) => setUsername(displayName(data)))
-      .catch(() => setUsername(null))
-      .finally(() => setChecking(false));
-  }, []);
+const useAuth = () => React.useContext(AuthContext);
 
-  const handleLogin = async () => {
-    const data = await getMe();
-    setUsername(displayName(data));
-    setShowAuth(false);
-    setView("app");
-  };
+const displayName = (u: { username: string | null; full_name: string | null; email: string }) =>
+  u.full_name || u.email || u.username;
+
+// ─── Topbar dùng chung cho các route có chrome ─────────────────────────────
+function Topbar({ tab }: { tab?: Tab }) {
+  const navigate = useNavigate();
+  const { username } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -44,7 +47,125 @@ export default function App() {
     }
   };
 
+  return (
+    <header className="topbar">
+      <div className="brand" style={{ cursor: "pointer" }} onClick={() => navigate("/")}>
+        <span className="brand-mark" />
+        <div><h1>TADIZB</h1></div>
+      </div>
+
+      {tab && (
+        <nav className="tab-nav">
+          <button
+            className={`tab${tab === "qr" ? " active" : ""}`}
+            onClick={() => navigate("/scan/qr")}
+          >
+            QR Thẻ Sinh Viên
+          </button>
+          <button
+            className={`tab${tab === "ocr" ? " active" : ""}`}
+            onClick={() => navigate("/scan/ocr")}
+          >
+            OCR
+          </button>
+        </nav>
+      )}
+
+      <div className="actions">
+        {username ? (
+          <>
+            <span className="username-label">{username}</span>
+            <button className="ghost" onClick={handleLogout}>
+              Đăng xuất
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="ghost" onClick={() => navigate("/login")}>
+              Đăng nhập
+            </button>
+            <button className="primary" onClick={() => navigate("/register")}>
+              Đăng ký
+            </button>
+          </>
+        )}
+      </div>
+    </header>
+  );
+}
+
+// ─── Route components ──────────────────────────────────────────────────────
+
+function HomeRoute() {
+  const navigate = useNavigate();
+  return (
+    <Homepage
+      onLoginClick={() => navigate("/login")}
+      onRegisterClick={() => navigate("/register")}
+      onQrClick={() => navigate("/scan/qr")}
+      onOcrClick={() => navigate("/scan/ocr")}
+    />
+  );
+}
+
+function ScanRoute({ mode }: { mode: Tab }) {
+  const navigate = useNavigate();
+  const { username } = useAuth();
   const handleScanSuccess = (_result: ScanResult) => {};
+  return (
+    <div className="app">
+      <Topbar tab={mode} />
+      <main className="main-content">
+        <Scanner
+          scanMode={mode}
+          isLoggedIn={!!username}
+          onScanSuccess={handleScanSuccess}
+          onLoginClick={() => navigate("/login")}
+        />
+      </main>
+    </div>
+  );
+}
+
+function AuthRoute({ initialMode }: { initialMode: "login" | "register" }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { refresh } = useAuth();
+
+  const handleLogin = async () => {
+    await refresh();
+    // Nếu user bị redirect từ trang khác → quay lại trang đó. Mặc định: /scan/qr.
+    const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+    navigate(from || "/scan/qr", { replace: true });
+  };
+
+  return (
+    <Login
+      onLogin={handleLogin}
+      initialMode={initialMode}
+      onBack={() => navigate("/")}
+    />
+  );
+}
+
+// ─── App root ──────────────────────────────────────────────────────────────
+
+function AppRoutes() {
+  const [username, setUsername] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await getMe();
+      setUsername(displayName(data));
+    } catch {
+      setUsername(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh().finally(() => setChecking(false));
+  }, [refresh]);
 
   if (checking) {
     return (
@@ -54,94 +175,25 @@ export default function App() {
     );
   }
 
-  // Trang đăng nhập / đăng ký
-  if (showAuth) {
-    return (
-      <Login
-        onLogin={handleLogin}
-        initialMode={authMode}
-        onBack={() => setShowAuth(false)}
-      />
-    );
-  }
-
-  // Trang chủ
-  if (view === "home") {
-    return (
-      <Homepage
-        onLoginClick={() => { setAuthMode("login"); setShowAuth(true); }}
-        onRegisterClick={() => { setAuthMode("register"); setShowAuth(true); }}
-        onQrClick={() => { setTab("qr"); setView("app"); }}
-        onOcrClick={() => { setTab("ocr"); setView("app"); }}
-      />
-    );
-  }
-
-  // App chính — truy cập được kể cả khi chưa đăng nhập
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand" style={{ cursor: "pointer" }} onClick={() => setView("home")}>
-          <span className="brand-mark" />
-          <div>
-            <h1>TADIZB</h1>
-          </div>
-        </div>
+    <AuthContext.Provider value={{ username, refresh, setUsername }}>
+      <Routes>
+        <Route path="/" element={<HomeRoute />} />
+        <Route path="/login" element={<AuthRoute initialMode="login" />} />
+        <Route path="/register" element={<AuthRoute initialMode="register" />} />
+        <Route path="/scan/qr" element={<ScanRoute mode="qr" />} />
+        <Route path="/scan/ocr" element={<ScanRoute mode="ocr" />} />
+        {/* Route không tồn tại → quay về trang chủ */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthContext.Provider>
+  );
+}
 
-        <nav className="tab-nav">
-          <button
-            className={`tab${tab === "qr" ? " active" : ""}`}
-            onClick={() => setTab("qr")}
-          >
-            QR Thẻ Sinh Viên
-          </button>
-          <button
-            className={`tab${tab === "ocr" ? " active" : ""}`}
-            onClick={() => setTab("ocr")}
-          >
-            OCR
-          </button>
-        </nav>
-
-        <div className="actions">
-          {username ? (
-            <>
-              <span className="username-label">{username}</span>
-              <button className="ghost" onClick={handleLogout}>
-                Đăng xuất
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="ghost" onClick={() => { setAuthMode("login"); setShowAuth(true); }}>
-                Đăng nhập
-              </button>
-              <button className="primary" onClick={() => { setAuthMode("register"); setShowAuth(true); }}>
-                Đăng ký
-              </button>
-            </>
-          )}
-        </div>
-      </header>
-
-      <main className="main-content">
-        {tab === "qr" && (
-          <Scanner
-            scanMode="qr"
-            isLoggedIn={!!username}
-            onScanSuccess={handleScanSuccess}
-            onLoginClick={() => { setAuthMode("login"); setShowAuth(true); }}
-          />
-        )}
-        {tab === "ocr" && (
-          <Scanner
-            scanMode="ocr"
-            isLoggedIn={!!username}
-            onScanSuccess={handleScanSuccess}
-            onLoginClick={() => { setAuthMode("login"); setShowAuth(true); }}
-          />
-        )}
-      </main>
-    </div>
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   );
 }

@@ -1,2 +1,25 @@
+.venv/
 .venv
 CLAUDE.md
+
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+*.log
+
+__pycache__/
+*.pyc
+
+.vscode/
+.idea/
+
+# Thư mục lưu file tạm của backend (ảnh đã warp, PDF xuất ra)
+backend/storage/
+
+# DB SQLite dev local (fallback khi DATABASE_URL trống)
+backend/dev.db
+*.sqlite
+*.sqlite3
