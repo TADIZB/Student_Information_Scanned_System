@@ -4,9 +4,10 @@ import type { ScanResult } from "./api";
 import Login from "./pages/Login";
 import Scanner from "./pages/Scanner";
 import Homepage from "./pages/Homepage";
+import Profile from "./pages/Profile";
 
 type Tab = "qr" | "ocr";
-type View = "home" | "app";
+type View = "home" | "app" | "profile";
 type AuthMode = "login" | "register";
 
 export default function App() {
@@ -74,8 +75,34 @@ export default function App() {
         onRegisterClick={() => { setAuthMode("register"); setShowAuth(true); }}
         onQrClick={() => { setTab("qr"); setView("app"); }}
         onOcrClick={() => { setTab("ocr"); setView("app"); }}
+        onProfileClick={() => setView("profile")}
         onLogoutClick={handleLogout}
       />
+    );
+  }
+
+  // Trang hồ sơ
+  if (view === "profile") {
+    return (
+      <div className="app">
+        <header className="topbar">
+          <div className="brand" style={{ cursor: "pointer" }} onClick={() => setView("home")}>
+            <span className="brand-mark" />
+            <div>
+              <h1>TADIZB</h1>
+            </div>
+          </div>
+          <div className="actions">
+            {username && <span className="username-label">{username}</span>}
+            <button className="ghost" onClick={handleLogout}>
+              Đăng xuất
+            </button>
+          </div>
+        </header>
+        <main className="main-content">
+          <Profile onBack={() => setView("home")} />
+        </main>
+      </div>
     );
   }
 
@@ -108,7 +135,13 @@ export default function App() {
         <div className="actions">
           {username ? (
             <>
-              <span className="username-label">{username}</span>
+              <span
+                className="username-label clickable"
+                onClick={() => setView("profile")}
+                title="Hồ sơ"
+              >
+                {username}
+              </span>
               <button className="ghost" onClick={handleLogout}>
                 Đăng xuất
               </button>
