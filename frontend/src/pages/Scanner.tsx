@@ -577,33 +577,11 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
               {renderQrData(lastResult.qr_data)}
             </div>
           )}
-          {lastResult.scan_type === "ocr" && (lastResult.raw_text || lastResult.extracted_info) && (
+          {lastResult.scan_type === "ocr" && lastResult.raw_text && (
             <div className="raw-section">
               <p className="raw-label">Kết quả phân tích OCR</p>
-              {lastResult.extracted_info && (
-                <div className="ocr-extracted">
-                  {([
-                    ["Họ tên", lastResult.extracted_info.full_name],
-                    ["MSSV", lastResult.extracted_info.student_id],
-                    ["Ngày sinh", lastResult.extracted_info.birth_date],
-                    ["Trường, Viện", lastResult.extracted_info.school],
-                    ["Email", lastResult.extracted_info.email],
-                  ] as [string, string | null][])
-                    .filter(([, v]) => v)
-                    .map(([label, value]) => (
-                      <div className="info-row" key={label}>
-                        <span>{label}</span>
-                        <strong>{value}</strong>
-                      </div>
-                    ))}
-                </div>
-              )}
-              {lastResult.raw_text && (
-                <>
-                  <p className="raw-label" style={{ marginTop: 10 }}>Văn bản OCR thô</p>
-                  <pre className="raw-pre">{lastResult.raw_text}</pre>
-                </>
-              )}
+              <p className="raw-label" style={{ marginTop: 10 }}>Văn bản OCR thô</p>
+              <pre className="raw-pre">{lastResult.raw_text}</pre>
             </div>
           )}
         </div>

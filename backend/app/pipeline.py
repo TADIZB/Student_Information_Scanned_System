@@ -124,7 +124,8 @@ def _aspect_ratio_ok(quad: np.ndarray) -> bool:
     (tl, tr, br, bl) = rect
     w = (np.linalg.norm(tr - tl) + np.linalg.norm(br - bl)) / 2
     h = (np.linalg.norm(bl - tl) + np.linalg.norm(br - tr)) / 2
-    if min(w, h) < 1: return False
+    if min(w, h) < 1:
+        return False
     ratio = max(w, h) / min(w, h)
     return 1.0 <= ratio <= 2.5
 
@@ -472,7 +473,7 @@ def ocr_cccd(roi_image: np.ndarray) -> tuple[str, List[Dict[str, Any]]]:
     blocks = ocr_ensemble(roi_image, psms=(6, 4))
     # blocks đã được sort theo (y, x) trong _dedupe_lines → text đúng thứ tự trên→dưới
     lines = [line for b in blocks for line in b.get("lines", [])]
-    raw_text = "\n".join(l["text"] for l in lines).strip()
+    raw_text = "\n".join(ln["text"] for ln in lines).strip()
     return raw_text, blocks
 
 
@@ -584,14 +585,14 @@ def _dedupe_lines(lines: List[Dict[str, Any]], iou_thresh: float = 0.4) -> List[
     Khi chạy ensemble (nhiều variant × PSM), nhiều dòng cùng vị trí sẽ trùng.
     Giữ dòng có conf cao nhất trong mỗi cụm bbox chồng lấn.
     """
-    sorted_lines = sorted(lines, key=lambda l: l["conf"], reverse=True)
+    sorted_lines = sorted(lines, key=lambda ln: ln["conf"], reverse=True)
     kept: List[Dict[str, Any]] = []
     for line in sorted_lines:
         if any(_bbox_iou(line["bbox"], k["bbox"]) > iou_thresh for k in kept):
             continue
         kept.append(line)
     # Sort cuối cùng theo y rồi x cho hiển thị
-    kept.sort(key=lambda l: (l["bbox"][1], l["bbox"][0]))
+    kept.sort(key=lambda ln: (ln["bbox"][1], ln["bbox"][0]))
     return kept
 
 
@@ -609,8 +610,8 @@ def ocr_preprocessed(preprocessed: np.ndarray) -> List[Dict[str, Any]]:
     )
     lines = _group_words_into_lines(data)
     return [
-        {"type": "text", "bbox": l["bbox"], "lines": [l], "confidence": l["conf"]}
-        for l in lines if l["conf"] >= 30
+        {"type": "text", "bbox": ln["bbox"], "lines": [ln], "confidence": ln["conf"]}
+        for ln in lines if ln["conf"] >= 30
     ]
 
 
@@ -650,8 +651,8 @@ def ocr_ensemble(image: np.ndarray, psms: Tuple[int, ...] = (6, 4)) -> List[Dict
 
     deduped = _dedupe_lines(all_lines)
     return [
-        {"type": "text", "bbox": l["bbox"], "lines": [l], "confidence": l["conf"]}
-        for l in deduped
+        {"type": "text", "bbox": ln["bbox"], "lines": [ln], "confidence": ln["conf"]}
+        for ln in deduped
     ]
 
 
@@ -999,7 +1000,7 @@ def _normalize_date(s: str | None) -> str | None:
 
 
 def _line_after_label(text: str, label_pattern: str, *, multiline: bool = False) -> str | None:
-    """Trả về phần text NGAY SAU label trên 1 hoặc nhiều dòng.
+    r"""Trả về phần text NGAY SAU label trên 1 hoặc nhiều dòng.
 
     label_pattern: chuỗi regex bắt label (vd: r"Họ và tên|Full\s*name").
     multiline: nếu True, lấy luôn dòng kế tiếp nếu giá trị tràn xuống.
