@@ -7,6 +7,7 @@ import {
   getScanHistory,
   lookupStudent,
   LookupResult,
+  OcrEngine,
   processScan,
   ScanDetail,
   ScanRecord,
@@ -107,6 +108,8 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Engine OCR: Tesseract (cục bộ) hoặc Gemini (AI). Chỉ dùng ở chế độ OCR.
+  const [ocrEngine, setOcrEngine] = useState<OcrEngine>("tesseract");
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   // Ảnh đang phân tích (snapshot từ cam hoặc file upload) — hiển thị thay cho cam khi busy
   const [analyzingPreview, setAnalyzingPreview] = useState<string | null>(null);
@@ -196,7 +199,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         } catch { /* ignore */ }
       }
       try {
-        const result = await processScan(blob, scanMode);
+        const result = await processScan(blob, scanMode, scanMode === "ocr" ? ocrEngine : "tesseract");
 
         // QR auto-scan: frame không có QR → bỏ qua, không cập nhật UI
         if (scanMode === "qr" && !result.qr_data) return;
@@ -227,7 +230,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busy, scanMode, loadHistory, onScanSuccess],
+    [busy, scanMode, ocrEngine, loadHistory, onScanSuccess],
   );
 
   // ── Detect QR client-side bằng jsQR (chạy ngay trên frame webcam) ────────
@@ -376,8 +379,36 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         <p className="scanner-head-sub">
           {scanMode === "qr"
             ? "Đưa mã QR trên thẻ vào khung — hệ thống tự động phát hiện và đối chiếu."
-            : "Đưa CCCD vào khung rồi chụp — pipeline 7 bước trích xuất thông tin."}
+            : ocrEngine === "gemini"
+              ? "Đưa CCCD vào khung rồi chụp — Gemini AI bóc tách thông tin."
+              : "Đưa CCCD vào khung rồi chụp — pipeline 7 bước trích xuất thông tin."}
         </p>
+
+        {/* Chọn engine xử lý (chỉ OCR) */}
+        {scanMode === "ocr" && (
+          <div className="engine-toggle" role="tablist" aria-label="Chọn engine OCR">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={ocrEngine === "tesseract"}
+              className={`engine-tab${ocrEngine === "tesseract" ? " active" : ""}`}
+              onClick={() => setOcrEngine("tesseract")}
+              disabled={busy}
+            >
+              Tesseract
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={ocrEngine === "gemini"}
+              className={`engine-tab${ocrEngine === "gemini" ? " active gemini" : ""}`}
+              onClick={() => setOcrEngine("gemini")}
+              disabled={busy}
+            >
+              ✦ Gemini AI
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Khung camera ───────────────────────────────────────────────────── */}

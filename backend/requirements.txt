@@ -6,6 +6,7 @@ opencv-python==4.10.0.84
 numpy==1.26.4
 pytesseract==0.3.10
 # ── Thêm mới ──────────────────────────
+google-genai==1.21.0
 sqlalchemy==2.0.30
 psycopg2-binary==2.9.9
 bcrypt==4.0.1

@@ -975,6 +975,38 @@ button:disabled {
   margin-right: auto;
 }
 
+/* Toggle chọn engine OCR */
+.engine-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 4px;
+  background: rgba(18, 20, 31, 0.06);
+  border-radius: 999px;
+}
+.engine-tab {
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 18px;
+  border-radius: 999px;
+  transition: all 0.18s ease;
+}
+.engine-tab:not(.active):hover:not(:disabled) {
+  color: var(--accent);
+}
+.engine-tab.active {
+  background: #fff;
+  color: var(--accent);
+  box-shadow: 0 4px 12px rgba(153, 27, 27, 0.16);
+}
+.engine-tab.active.gemini {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.32);
+}
+
 .webcam-wrapper {
   position: relative;
   border-radius: 22px;
