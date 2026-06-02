@@ -398,7 +398,14 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
       <div className="login-shell">
         {/* Hero panel */}
         <aside className="login-hero" aria-hidden="true">
-          <div className="login-hero-scanline" />
+          {/* Slideshow lướt ảnh nền */}
+          <div className="login-hero-slides">
+            <div className="login-hero-slide" style={{ backgroundImage: "url(/hero-scan.svg)" }} />
+            <div className="login-hero-slide" style={{ backgroundImage: "url(/hero-scan-2.svg)" }} />
+            <div className="login-hero-slide" style={{ backgroundImage: "url(/hero-scan-3.svg)" }} />
+            <div className="login-hero-slide" style={{ backgroundImage: "url(/hero-scan-4.svg)" }} />
+          </div>
+          <div className="login-hero-overlay" />
           <div className="login-hero-top">
             <span className="login-hero-badge">
               <span className="login-hero-badge-dot" />
@@ -408,11 +415,6 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
           <div className="login-hero-bottom">
             <h2>Quét &amp; nhận dạng<br/>thẻ sinh viên</h2>
             <p>Hệ thống nhận dạng thẻ sinh viên thông minh.</p>
-            <ul className="login-hero-features">
-              <li><span className="login-hero-tick">✓</span> Quét mã QR tức thì qua camera</li>
-              <li><span className="login-hero-tick">✓</span> OCR trích xuất văn bản 7 bước</li>
-              <li><span className="login-hero-tick">✓</span> Đối chiếu CSDL &amp; lưu lịch sử</li>
-            </ul>
           </div>
         </aside>
 

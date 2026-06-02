@@ -1880,18 +1880,60 @@ button.ghost.small {
   min-height: 520px;
   color: #fff;
   border-radius: 28px;
-  background:
-    linear-gradient(180deg, rgba(127,29,29,0.15) 0%, rgba(127,29,29,0.6) 60%, rgba(127,29,29,0.94) 100%),
-    url("/hero-scan.svg") center / cover no-repeat,
-    linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+  background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
   box-shadow: 0 24px 60px rgba(127,29,29,0.35);
   position: relative;
   overflow: hidden;
 }
+
+/* ── Slideshow lướt ảnh ──────────────────────────────────────── */
+.login-hero-slides {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.login-hero-slide {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: heroSlideShow 24s infinite;
+}
+/* 4 ảnh, mỗi ảnh hiển thị ~6s; dùng negative-delay để lặp mượt và so le */
+.login-hero-slide:nth-child(1) { animation-delay: 0s; }
+.login-hero-slide:nth-child(2) { animation-delay: -18s; }
+.login-hero-slide:nth-child(3) { animation-delay: -12s; }
+.login-hero-slide:nth-child(4) { animation-delay: -6s; }
+
+@keyframes heroSlideShow {
+  0%    { opacity: 0; transform: translateX(70px) scale(1.06); }
+  4%    { opacity: 1; transform: translateX(0) scale(1.04); }
+  25%   { opacity: 1; transform: translateX(0) scale(1); }
+  29%   { opacity: 0; transform: translateX(-70px) scale(1.04); }
+  100%  { opacity: 0; transform: translateX(-70px) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-hero-slide { animation-duration: 0s; }
+  .login-hero-slide:nth-child(1) { opacity: 1; }
+}
+
+/* Lớp phủ gradient đỏ để chữ luôn đọc rõ trên ảnh */
+.login-hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(127,29,29,0.2) 0%, rgba(127,29,29,0.62) 58%, rgba(127,29,29,0.95) 100%);
+  pointer-events: none;
+}
+
 .login-hero-top,
 .login-hero-bottom {
   position: relative;
-  z-index: 2;
+  z-index: 3;
 }
 .login-hero-badge {
   display: inline-flex;
@@ -1932,45 +1974,6 @@ button.ghost.small {
   line-height: 1.6;
   margin: 10px 0 18px;
   text-shadow: 0 1px 8px rgba(0,0,0,0.35);
-}
-.login-hero-features {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.login-hero-features li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13.5px;
-  color: rgba(255,255,255,0.95);
-  text-shadow: 0 1px 8px rgba(0,0,0,0.3);
-}
-.login-hero-tick {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.3);
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.login-hero-scanline {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 80px;
-  z-index: 1;
-  background: linear-gradient(180deg, transparent, rgba(255,255,255,0.18), transparent);
-  animation: heroScan 4s ease-in-out infinite;
-  pointer-events: none;
 }
 
 .login-card {
