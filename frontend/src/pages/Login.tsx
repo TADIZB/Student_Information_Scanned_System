@@ -1,7 +1,7 @@
 import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
-import { login, registerHust, registerLocal } from "../api";
+import { login, registerLocal, requestHustOtp, verifyHustOtp } from "../api";
 
 type Mode = "login" | "register";
 type RegisterKind = "hust" | "local";
@@ -73,6 +73,14 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
 
+  // OTP đăng ký tài khoản trường (2 bước)
+  const RESEND_COOLDOWN = 30; // giây tối thiểu giữa 2 lần gửi mã
+  const [otpStep, setOtpStep] = useState<"request" | "verify">("request");
+  const [code, setCode] = useState("");
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null); // ms
+  const [resendAt, setResendAt] = useState<number | null>(null);         // ms cho phép gửi lại
+  const [nowTs, setNowTs] = useState(Date.now());
+
   // UX state
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showPw, setShowPw] = useState(false);
@@ -97,6 +105,26 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Tick mỗi giây khi đang ở bước nhập mã (để đếm ngược hạn + cooldown gửi lại)
+  const inOtpVerify = mode === "register" && registerKind === "hust" && otpStep === "verify";
+  useEffect(() => {
+    if (!inOtpVerify) return;
+    setNowTs(Date.now());
+    const id = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [inOtpVerify]);
+
+  const secondsLeft = otpExpiresAt ? Math.max(0, Math.ceil((otpExpiresAt - nowTs) / 1000)) : 0;
+  const resendCooldown = resendAt ? Math.max(0, Math.ceil((resendAt - nowTs) / 1000)) : 0;
+  const fmtMMSS = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const startOtpTimers = (expiresIn: number) => {
+    const now = Date.now();
+    setOtpExpiresAt(now + expiresIn * 1000);
+    setResendAt(now + RESEND_COOLDOWN * 1000);
+    setNowTs(now);
+  };
+
   // Khi popup lịch mở: chặn scroll body + Esc đóng
   useEffect(() => {
     if (!showCalendar) return;
@@ -120,6 +148,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     password: password.length >= 6 && !COMMON_PASSWORDS.has(password.toLowerCase()),
     confirm: confirm.length > 0 && confirm === password,
     birthDate: birthDate.trim() === "" || !!parseBirthDate(birthDate),
+    code: /^\d{6}$/.test(code.trim()),
   };
 
   // ─── Password strength ───────────────────────────────────────────────────
@@ -162,17 +191,25 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   };
 
   // ─── Switchers ───────────────────────────────────────────────────────────
+  const resetOtp = () => {
+    setOtpStep("request");
+    setCode("");
+    setOtpExpiresAt(null);
+    setResendAt(null);
+  };
   const switchMode = (m: Mode) => {
     setMode(m);
     setPassword("");
     setConfirm("");
     setTouched({});
     setToast(null);
+    resetOtp();
   };
   const switchKind = (k: RegisterKind) => {
     setRegisterKind(k);
     setTouched({});
     setToast(null);
+    resetOtp();
   };
 
   const touch = (name: string) => setTouched((t) => ({ ...t, [name]: true }));
@@ -206,7 +243,29 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
       return;
     }
 
-    // Register validations
+    // ── Đăng ký tài khoản trường — Bước 1: xin mã OTP ──
+    if (registerKind === "hust" && otpStep === "request") {
+      if (!v.email) {
+        setToast({ kind: "error", msg: `Email phải có đuôi ${HUST_DOMAIN}.` });
+        touch("email");
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await requestHustOtp(email.trim());
+        startOtpTimers(res.expires_in);
+        setOtpStep("verify");
+        setCode("");
+        setToast({ kind: "success", msg: "Đã gửi mã xác nhận tới email của bạn." });
+      } catch (err: any) {
+        setToast({ kind: "error", msg: err?.response?.data?.detail || "Không gửi được mã xác nhận." });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Từ đây cần mật khẩu (đăng ký thường, hoặc bước 2 đăng ký trường)
     if (!v.password) {
       setToast({ kind: "error", msg: "Mật khẩu chưa đạt yêu cầu (≥6 ký tự, không phổ biến)." });
       touch("password");
@@ -218,48 +277,74 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
       return;
     }
 
+    // ── Đăng ký tài khoản trường — Bước 2: xác minh mã + tạo tài khoản ──
+    if (registerKind === "hust") {
+      if (!v.code) {
+        setToast({ kind: "error", msg: "Mã xác nhận gồm 6 chữ số." });
+        touch("code");
+        return;
+      }
+      setLoading(true);
+      try {
+        await verifyHustOtp({
+          email: email.trim(),
+          code: code.trim(),
+          password,
+          full_name: fullName.trim() || undefined,
+        });
+        setToast({ kind: "success", msg: "Đăng ký thành công." });
+        onLogin();
+      } catch (err: any) {
+        setToast({ kind: "error", msg: err?.response?.data?.detail || "Xác minh thất bại." });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── Đăng ký tài khoản thường ──
+    if (!v.username) {
+      setToast({ kind: "error", msg: "Tên đăng nhập 3-50 ký tự, chỉ chữ/số/._-" });
+      touch("username");
+      return;
+    }
+    if (!v.birthDate) {
+      setToast({ kind: "error", msg: "Ngày sinh không hợp lệ. Format: dd/mm/yyyy." });
+      touch("birthDate");
+      return;
+    }
     setLoading(true);
     try {
-      if (registerKind === "hust") {
-        if (!v.email) {
-          setToast({ kind: "error", msg: `Email phải có đuôi ${HUST_DOMAIN}.` });
-          touch("email");
-          setLoading(false);
-          return;
-        }
-        await registerHust({
-          email: email.trim(),
-          password,
-          full_name: fullName.trim() || undefined,
-        });
-      } else {
-        if (!v.username) {
-          setToast({ kind: "error", msg: "Tên đăng nhập 3-50 ký tự, chỉ chữ/số/._-" });
-          touch("username");
-          setLoading(false);
-          return;
-        }
-        if (!v.birthDate) {
-          setToast({ kind: "error", msg: "Ngày sinh không hợp lệ. Format: dd/mm/yyyy." });
-          touch("birthDate");
-          setLoading(false);
-          return;
-        }
-        let bdate: string | undefined;
-        if (birthDate.trim()) {
-          bdate = parseBirthDate(birthDate) || undefined;
-        }
-        await registerLocal({
-          username: username.trim(),
-          password,
-          full_name: fullName.trim() || undefined,
-          birth_date: bdate,
-        });
+      let bdate: string | undefined;
+      if (birthDate.trim()) {
+        bdate = parseBirthDate(birthDate) || undefined;
       }
+      await registerLocal({
+        username: username.trim(),
+        password,
+        full_name: fullName.trim() || undefined,
+        birth_date: bdate,
+      });
       setToast({ kind: "success", msg: "Đăng ký thành công." });
       onLogin();
     } catch (err: any) {
       setToast({ kind: "error", msg: err?.response?.data?.detail || "Đăng ký thất bại." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Gửi lại mã OTP (bước 2)
+  const handleResend = async () => {
+    if (loading || resendCooldown > 0) return;
+    setLoading(true);
+    try {
+      const res = await requestHustOtp(email.trim());
+      startOtpTimers(res.expires_in);
+      setCode("");
+      setToast({ kind: "success", msg: "Đã gửi lại mã mới." });
+    } catch (err: any) {
+      setToast({ kind: "error", msg: err?.response?.data?.detail || "Không gửi lại được mã." });
     } finally {
       setLoading(false);
     }
@@ -288,13 +373,47 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
 
   const s = passwordStrength(password);
 
+  // Bước xin mã (đăng ký trường): chỉ hiện email + nút "Gửi mã".
+  const hustRequestStep = mode === "register" && registerKind === "hust" && otpStep === "request";
+  const showFullName = mode === "register" && !hustRequestStep;
+  const showPasswordFields = !hustRequestStep;          // login + local + hust verify
+  const showConfirm = mode === "register" && !hustRequestStep;
+
+  const submitLabel = loading
+    ? mode === "login"
+      ? "Đang đăng nhập..."
+      : hustRequestStep
+        ? "Đang gửi mã..."
+        : "Đang xử lý..."
+    : mode === "login"
+      ? "Đăng nhập"
+      : hustRequestStep
+        ? "Gửi mã xác nhận"
+        : registerKind === "hust"
+          ? "Xác nhận & đăng ký"
+          : "Đăng ký";
+
   return (
     <div className="login-page">
       <div className="login-shell">
         {/* Hero panel */}
         <aside className="login-hero" aria-hidden="true">
-          <h2>Quét &amp; nhận dạng<br/>thẻ sinh viên</h2>
-          <p>Hệ thống TADIZB Scanner — QR · OCR · đối chiếu DB sinh viên.</p>
+          <div className="login-hero-scanline" />
+          <div className="login-hero-top">
+            <span className="login-hero-badge">
+              <span className="login-hero-badge-dot" />
+              TADIZB Scanner · HUST
+            </span>
+          </div>
+          <div className="login-hero-bottom">
+            <h2>Quét &amp; nhận dạng<br/>thẻ sinh viên</h2>
+            <p>Hệ thống nhận dạng thẻ sinh viên thông minh.</p>
+            <ul className="login-hero-features">
+              <li><span className="login-hero-tick">✓</span> Quét mã QR tức thì qua camera</li>
+              <li><span className="login-hero-tick">✓</span> OCR trích xuất văn bản 7 bước</li>
+              <li><span className="login-hero-tick">✓</span> Đối chiếu CSDL &amp; lưu lịch sử</li>
+            </ul>
+          </div>
         </aside>
 
         {/* Form panel */}
@@ -348,24 +467,72 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                 {renderStatusIcon("identifier", identifier)}
               </div>
             ) : registerKind === "hust" ? (
-              <div className={fieldClass("email", email)}>
-                <input
-                  ref={firstFieldRef}
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onBlur={() => touch("email")}
-                  placeholder=" "
-                  required
-                  autoComplete="email"
-                />
-                <label htmlFor="email">Email trường ({HUST_DOMAIN})</label>
-                {renderStatusIcon("email", email)}
-                {touched.email && email && !v.email && (
-                  <div className="field-hint err">Email phải có đuôi {HUST_DOMAIN}.</div>
+              <>
+                <div className={fieldClass("email", email)}>
+                  <input
+                    ref={firstFieldRef}
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => touch("email")}
+                    placeholder=" "
+                    required
+                    autoComplete="email"
+                    disabled={inOtpVerify}
+                  />
+                  <label htmlFor="email">Email trường ({HUST_DOMAIN})</label>
+                  {!inOtpVerify && renderStatusIcon("email", email)}
+                  {touched.email && email && !v.email && (
+                    <div className="field-hint err">Email phải có đuôi {HUST_DOMAIN}.</div>
+                  )}
+                </div>
+
+                {inOtpVerify && (
+                  <>
+                    <div className={fieldClass("code", code)}>
+                      <input
+                        id="code"
+                        type="text"
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        onBlur={() => touch("code")}
+                        placeholder=" "
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                      />
+                      <label htmlFor="code">Mã xác nhận (6 chữ số)</label>
+                      {renderStatusIcon("code", code)}
+                      <div className="field-hint" style={{ color: secondsLeft > 0 ? "#64748b" : "#ef4444" }}>
+                        {secondsLeft > 0
+                          ? `Mã hết hạn sau ${fmtMMSS(secondsLeft)}.`
+                          : "Mã đã hết hạn — vui lòng gửi lại."}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: -4, marginBottom: 4 }}>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => { resetOtp(); setToast(null); }}
+                        style={{ fontSize: 13, padding: "4px 0" }}
+                      >
+                        ← Đổi email
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={handleResend}
+                        disabled={loading || resendCooldown > 0}
+                        style={{ fontSize: 13, padding: "4px 0" }}
+                      >
+                        {resendCooldown > 0 ? `Gửi lại mã (${resendCooldown}s)` : "Gửi lại mã"}
+                      </button>
+                    </div>
+                  </>
                 )}
-              </div>
+              </>
             ) : (
               <div className={fieldClass("username", username)}>
                 <input
@@ -387,8 +554,8 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
               </div>
             )}
 
-            {/* ── Họ và tên + Ngày sinh (chỉ ở register) ── */}
-            {mode === "register" && (
+            {/* ── Họ và tên + Ngày sinh (register; tài khoản trường: chỉ ở bước 2) ── */}
+            {showFullName && (
               <>
                 <div className={`field-floating${fullName ? " has-value" : ""}`}>
                   <input
@@ -435,6 +602,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
             )}
 
             {/* ── Password ── */}
+            {showPasswordFields && (
             <div className={fieldClass("password", password)}>
               <input
                 id="password"
@@ -485,9 +653,10 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                 <div className="field-hint err">≥ 6 ký tự và không nằm trong danh sách phổ biến.</div>
               )}
             </div>
+            )}
 
             {/* ── Confirm password ── */}
-            {mode === "register" && (
+            {showConfirm && (
               <div className={fieldClass("confirm", confirm)}>
                 <input
                   id="confirm"
@@ -520,9 +689,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
 
             <button type="submit" className="primary full-width" disabled={loading} style={{ marginTop: 6 }}>
               {loading && <span className="btn-spinner" />}
-              {loading
-                ? mode === "login" ? "Đang đăng nhập..." : "Đang đăng ký..."
-                : mode === "login" ? "Đăng nhập" : "Đăng ký"}
+              {submitLabel}
             </button>
           </form>
 

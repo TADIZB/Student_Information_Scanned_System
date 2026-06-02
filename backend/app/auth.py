@@ -123,6 +123,7 @@ def register_hust(
         password_hash=hash_password(password),
         full_name=(full_name or "").strip() or None,
         birth_date=(birth_date or "").strip() or None,
+        email_verified=True,  # chỉ tới đây sau khi đã xác minh OTP
     )
     db.add(user)
     db.commit()

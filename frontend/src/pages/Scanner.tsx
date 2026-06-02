@@ -364,6 +364,22 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
   return (
     <div className="scanner-page">
 
+      {/* ── Header chế độ quét ─────────────────────────────────────────────── */}
+      <div className="scanner-head">
+        <span className={`scanner-mode-chip ${scanMode}`}>
+          <span className="scanner-mode-dot" />
+          {scanMode === "qr" ? "Chế độ QR" : "Chế độ OCR"}
+        </span>
+        <h2 className="scanner-head-title">
+          {scanMode === "qr" ? "Quét mã QR thẻ sinh viên" : "Nhận dạng văn bản (OCR)"}
+        </h2>
+        <p className="scanner-head-sub">
+          {scanMode === "qr"
+            ? "Đưa mã QR trên thẻ vào khung — hệ thống tự động phát hiện và đối chiếu."
+            : "Đưa CCCD vào khung rồi chụp — pipeline 7 bước trích xuất thông tin."}
+        </p>
+      </div>
+
       {/* ── Khung camera ───────────────────────────────────────────────────── */}
       <div className="webcam-wrapper">
         {busy && scanMode === "ocr" ? (

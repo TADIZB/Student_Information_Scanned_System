@@ -1,8 +1,20 @@
 import { api } from "./client";
-import type { AuthUser, RegisterHustInput, RegisterLocalInput } from "./types";
+import type {
+  AuthUser,
+  RegisterLocalInput,
+  RequestOtpResponse,
+  VerifyHustOtpInput,
+} from "./types";
 
-export async function registerHust(input: RegisterHustInput): Promise<AuthUser> {
-  const res = await api.post("/register/hust", input);
+// Bước 1: xin mã OTP gửi về email trường.
+export async function requestHustOtp(email: string): Promise<RequestOtpResponse> {
+  const res = await api.post("/register/hust/request-otp", { email });
+  return res.data;
+}
+
+// Bước 2: xác minh mã + tạo tài khoản (BE tự set cookie đăng nhập).
+export async function verifyHustOtp(input: VerifyHustOtpInput): Promise<AuthUser> {
+  const res = await api.post("/register/hust/verify-otp", input);
   return res.data;
 }
 

@@ -138,8 +138,15 @@ export default function Profile({ onBack }: Props) {
 
   return (
     <div className="profile-page">
+      {onBack && (
+        <button className="ghost profile-back" onClick={onBack}>
+          ← Quay lại
+        </button>
+      )}
+
       {/* Header card */}
       <div className="profile-header">
+        <div className="profile-cover" />
         <div className="profile-avatar-wrap">
           {avatarSrc ? (
             <img src={avatarSrc} alt="Ảnh đại diện" className="profile-avatar" />
@@ -175,21 +182,23 @@ export default function Profile({ onBack }: Props) {
         <div className="profile-header-info">
           <h2>{displayName}</h2>
           <div className="profile-chip">{accountType}</div>
-          {user.email && <div className="profile-meta">{user.email}</div>}
-          {user.username && <div className="profile-meta">@{user.username}</div>}
-          <div className="profile-meta">
-            Tham gia: {user.created_at ? new Date(user.created_at).toLocaleDateString("vi-VN") : "—"}
+          <div className="profile-meta-list">
+            {user.email && <div className="profile-meta">{user.email}</div>}
+            {user.username && <div className="profile-meta">@{user.username}</div>}
+            <div className="profile-meta">
+              Tham gia: {user.created_at ? new Date(user.created_at).toLocaleDateString("vi-VN") : "—"}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Stats */}
       <div className="profile-stats">
-        <StatCard label="Tổng số quét" value={stats.total_scans} />
-        <StatCard label="QR" value={stats.qr_scans} accent="#0ea5e9" />
-        <StatCard label="OCR" value={stats.ocr_scans} accent="#a855f7" />
-        <StatCard label="Tra cứu" value={stats.lookup_scans} accent="#f59e0b" />
-        <StatCard label="Khớp SV" value={stats.matched} accent="#10b981" />
+        <StatCard label="Tổng số quét" value={stats.total_scans} tint="#dc2626" icon="total" />
+        <StatCard label="QR" value={stats.qr_scans} tint="#ef4444" icon="qr" />
+        <StatCard label="OCR" value={stats.ocr_scans} tint="#b91c1c" icon="ocr" />
+        <StatCard label="Tra cứu" value={stats.lookup_scans} tint="#f97316" icon="lookup" />
+        <StatCard label="Khớp SV" value={stats.matched} tint="#059669" icon="matched" />
       </div>
 
       {/* Info section */}
@@ -249,14 +258,6 @@ export default function Profile({ onBack }: Props) {
         )}
       </div>
 
-      {onBack && (
-        <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
-          <button className="ghost" onClick={onBack}>
-            ← Quay lại
-          </button>
-        </div>
-      )}
-
       {toast && (
         <div className={`toast ${toast.kind}`} role="status" onClick={() => setToast(null)}>
           {toast.msg}
@@ -266,10 +267,39 @@ export default function Profile({ onBack }: Props) {
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent?: string }) {
+const STAT_ICONS: Record<string, React.ReactNode> = {
+  total: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" />
+    </svg>
+  ),
+  qr: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v7M17 21h-3" />
+    </svg>
+  ),
+  ocr: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7V5a1 1 0 0 1 1-1h2M20 7V5a1 1 0 0 0-1-1h-2M4 17v2a1 1 0 0 0 1 1h2M20 17v2a1 1 0 0 1-1 1h-2M8 12h8" />
+    </svg>
+  ),
+  lookup: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+    </svg>
+  ),
+  matched: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  ),
+};
+
+function StatCard({ label, value, tint, icon }: { label: string; value: number; tint: string; icon: string }) {
   return (
-    <div className="stat-card">
-      <div className="stat-value" style={accent ? { color: accent } : undefined}>{value}</div>
+    <div className="stat-card" style={{ ["--tint" as string]: tint }}>
+      <div className="stat-icon">{STAT_ICONS[icon]}</div>
+      <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
     </div>
   );

@@ -92,8 +92,14 @@ export interface AuthUser {
   birth_date: string | null;
 }
 
-export interface RegisterHustInput {
+export interface RequestOtpResponse {
+  message: string;
+  expires_in: number; // giây tới khi mã hết hạn
+}
+
+export interface VerifyHustOtpInput {
   email: string;
+  code: string;
   password: string;
   full_name?: string;
   birth_date?: string;

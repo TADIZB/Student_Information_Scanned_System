@@ -17,6 +17,20 @@ class RegisterHustPayload(BaseModel):
     birth_date: str | None = None   # ISO yyyy-mm-dd hoặc dd/mm/yyyy
 
 
+class RequestHustOtpPayload(BaseModel):
+    """Bước 1 đăng ký trường: xin mã OTP gửi về email @sis.hust.edu.vn."""
+    email: str
+
+
+class VerifyHustOtpPayload(BaseModel):
+    """Bước 2 đăng ký trường: xác minh mã + tạo tài khoản."""
+    email: str
+    code: str
+    password: str
+    full_name: str | None = None
+    birth_date: str | None = None
+
+
 class RegisterLocalPayload(BaseModel):
     """Đăng ký bằng username thường (không cần email)."""
     username: str

@@ -53,3 +53,45 @@ def rate_limit_process_scan(request: Request) -> None:
             )
 
         bucket.append(now)
+
+
+# ─── Rate-limit gửi OTP đăng ký (chống spam mail) ─────────────────────────────
+# Giới hạn riêng theo email và theo IP.
+_OTP_EMAIL_MAX, _OTP_EMAIL_WINDOW = 3, 600     # 3 mã / 10 phút / email
+_OTP_IP_MAX, _OTP_IP_WINDOW = 10, 3600         # 10 mã / giờ / IP
+
+_otp_email_buckets: dict[str, deque[float]] = {}
+_otp_ip_buckets: dict[str, deque[float]] = {}
+
+
+def _peek_retry(buckets: dict[str, deque[float]], key: str, max_req: int, window: int, now: float) -> int:
+    """Dọn timestamp cũ; trả về số giây phải chờ nếu đã đầy, ngược lại 0."""
+    bucket = buckets.setdefault(key, deque())
+    cutoff = now - window
+    while bucket and bucket[0] < cutoff:
+        bucket.popleft()
+    if len(bucket) >= max_req:
+        return max(1, int(bucket[0] + window - now))
+    return 0
+
+
+def enforce_otp_rate_limit(email: str, ip: str) -> None:
+    """Chặn nếu email hoặc IP yêu cầu mã quá nhiều. Tính cả hai trước khi ghi nhận."""
+    now = time.monotonic()
+    with _lock:
+        retry = _peek_retry(_otp_email_buckets, email, _OTP_EMAIL_MAX, _OTP_EMAIL_WINDOW, now)
+        if retry:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Bạn đã yêu cầu mã quá nhiều lần. Vui lòng thử lại sau {retry}s.",
+                headers={"Retry-After": str(retry)},
+            )
+        retry = _peek_retry(_otp_ip_buckets, ip, _OTP_IP_MAX, _OTP_IP_WINDOW, now)
+        if retry:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Quá nhiều yêu cầu gửi mã từ thiết bị này. Vui lòng thử lại sau {retry}s.",
+                headers={"Retry-After": str(retry)},
+            )
+        _otp_email_buckets[email].append(now)
+        _otp_ip_buckets[ip].append(now)
