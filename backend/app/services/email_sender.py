@@ -38,24 +38,35 @@ def _smtp_config() -> dict:
     }
 
 
-def send_otp_email(to_email: str, code: str) -> None:
-    """Gửi mã 6 số tới địa chỉ email (đồng bộ — chạy trong threadpool của FastAPI)."""
+def send_otp_email(to_email: str, code: str, purpose: str = "register") -> None:
+    """Gửi mã 6 số tới địa chỉ email (đồng bộ — chạy trong threadpool của FastAPI).
+
+    purpose="register" → mã xác nhận đăng ký; "reset" → mã đặt lại mật khẩu.
+    """
     cfg = _smtp_config()
 
+    is_reset = purpose == "reset"
+    subject = (
+        "Mã đặt lại mật khẩu TADIZB Scanner"
+        if is_reset
+        else "Mã xác nhận đăng ký TADIZB Scanner"
+    )
+    action = "đặt lại mật khẩu" if is_reset else "đăng ký tài khoản"
+
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Mã xác nhận đăng ký TADIZB Scanner"
+    msg["Subject"] = subject
     msg["From"] = cfg["sender"]
     msg["To"] = to_email
 
     text = (
-        f"Mã xác nhận đăng ký TADIZB Scanner của bạn là: {code}\n"
+        f"Mã xác nhận {action} TADIZB Scanner của bạn là: {code}\n"
         f"Mã có hiệu lực trong {OTP_TTL_MINUTES} phút. "
         f"Nếu bạn không yêu cầu, vui lòng bỏ qua email này."
     )
     html = f"""\
 <div style="font-family:Segoe UI,Arial,sans-serif;max-width:480px;margin:auto">
   <h2 style="color:#0f142c">TADIZB Scanner</h2>
-  <p>Mã xác nhận đăng ký tài khoản trường của bạn là:</p>
+  <p>Mã xác nhận {action} của bạn là:</p>
   <p style="font-size:32px;font-weight:700;letter-spacing:8px;color:#2563eb">{code}</p>
   <p style="color:#555">Mã có hiệu lực trong <b>{OTP_TTL_MINUTES} phút</b>.
   Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>

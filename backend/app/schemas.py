@@ -9,21 +9,15 @@ class LoginPayload(BaseModel):
     password: str
 
 
-class RegisterHustPayload(BaseModel):
-    """Đăng ký bằng tài khoản trường (email @sis.hust.edu.vn)."""
-    email: str
-    password: str
-    full_name: str | None = None
-    birth_date: str | None = None   # ISO yyyy-mm-dd hoặc dd/mm/yyyy
-
-
-class RequestHustOtpPayload(BaseModel):
-    """Bước 1 đăng ký trường: xin mã OTP gửi về email @sis.hust.edu.vn."""
+class RequestLocalOtpPayload(BaseModel):
+    """Bước 1 đăng ký thường: kiểm tra username + email rồi gửi OTP về email."""
+    username: str
     email: str
 
 
-class VerifyHustOtpPayload(BaseModel):
-    """Bước 2 đăng ký trường: xác minh mã + tạo tài khoản."""
+class RegisterLocalPayload(BaseModel):
+    """Bước 2 đăng ký thường: xác minh OTP + tạo tài khoản (email bắt buộc)."""
+    username: str
     email: str
     code: str
     password: str
@@ -31,12 +25,16 @@ class VerifyHustOtpPayload(BaseModel):
     birth_date: str | None = None
 
 
-class RegisterLocalPayload(BaseModel):
-    """Đăng ký bằng username thường (không cần email)."""
+class ForgotPasswordPayload(BaseModel):
+    """Bước 1 quên mật khẩu: nhập tên đăng nhập → gửi OTP về email đã đăng ký."""
     username: str
+
+
+class ResetPasswordPayload(BaseModel):
+    """Bước 2 quên mật khẩu: xác minh OTP + đặt lại mật khẩu mới."""
+    username: str
+    code: str
     password: str
-    full_name: str | None = None
-    birth_date: str | None = None
 
 
 class UpdateProfilePayload(BaseModel):

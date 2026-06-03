@@ -1,12 +1,3 @@
-"""Trích xuất thông tin CCCD bằng Gemini Vision (engine thay thế cho Tesseract).
-
-Cấu hình qua biến môi trường (.env):
-  GEMINI_API_KEY  — API key từ Google AI Studio (bắt buộc)
-  GEMINI_MODEL    — model vision (mặc định 'gemini-2.5-flash')
-
-Trả về cùng shape dict với pipeline.extract_cccd_info() để tái dùng toàn bộ
-phần đối chiếu sinh viên + lưu lịch sử trong routers/scan.py.
-"""
 from __future__ import annotations
 
 import json

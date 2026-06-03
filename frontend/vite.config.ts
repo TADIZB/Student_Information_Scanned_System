@@ -5,7 +5,7 @@ import basicSsl from "@vitejs/plugin-basic-ssl";
 
 
 const BACKEND_ROUTES = [
-  "/register", "/login", "/logout", "/me", "/auth",
+  "/register", "/login", "/logout", "/me", "/auth", "/password",
   "/process-scan", "/scan-history",
   "/students", "/files", "/images",
 ];

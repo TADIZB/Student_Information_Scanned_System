@@ -3,23 +3,37 @@ import type {
   AuthUser,
   RegisterLocalInput,
   RequestOtpResponse,
-  VerifyHustOtpInput,
+  ResetPasswordInput,
 } from "./types";
 
-// Bước 1: xin mã OTP gửi về email trường.
-export async function requestHustOtp(email: string): Promise<RequestOtpResponse> {
-  const res = await api.post("/register/hust/request-otp", { email });
+// Đăng ký - Bước 1: kiểm tra username + email rồi gửi OTP về email.
+export async function requestLocalOtp(
+  username: string,
+  email: string
+): Promise<RequestOtpResponse> {
+  const res = await api.post("/register/local/request-otp", { username, email });
   return res.data;
 }
 
-// Bước 2: xác minh mã + tạo tài khoản (BE tự set cookie đăng nhập).
-export async function verifyHustOtp(input: VerifyHustOtpInput): Promise<AuthUser> {
-  const res = await api.post("/register/hust/verify-otp", input);
-  return res.data;
-}
-
+// Đăng ký thường - Bước 2: xác minh mã + tạo tài khoản (BE tự set cookie).
 export async function registerLocal(input: RegisterLocalInput): Promise<AuthUser> {
-  const res = await api.post("/register/local", input);
+  const res = await api.post("/register/local/verify-otp", input);
+  return res.data;
+}
+
+// Quên mật khẩu - Bước 1: nhập tên đăng nhập → gửi OTP về email đã đăng ký.
+export async function requestPasswordResetOtp(
+  username: string
+): Promise<RequestOtpResponse> {
+  const res = await api.post("/password/forgot/request-otp", { username });
+  return res.data;
+}
+
+// Quên mật khẩu - Bước 2: xác minh mã + đặt lại mật khẩu.
+export async function resetPassword(
+  input: ResetPasswordInput
+): Promise<{ message: string }> {
+  const res = await api.post("/password/reset", input);
   return res.data;
 }
 

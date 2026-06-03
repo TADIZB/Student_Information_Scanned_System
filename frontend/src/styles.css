@@ -2019,7 +2019,9 @@ button.ghost.small {
   display: flex;
   flex-direction: column;
   min-height: 720px;
-  height: 720px;
+  /* Cho card cao theo nội dung nhưng không vượt khỏi màn hình; phần form sẽ tự cuộn. */
+  max-height: calc(100vh - 48px);
+  overflow: hidden;       /* clip bo góc; cuộn nằm bên trong .login-form */
 }
 
 /* Floating label */
@@ -2192,13 +2194,18 @@ button.ghost.small {
 
 .login-form {
   flex: 1;
+  min-height: 0;               /* cho phép vùng form co lại để cuộn được trong card */
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: hidden;            /* không cho content vượt khỏi card */
+  overflow-y: auto;            /* nhiều ô → cuộn dọc thay vì bị cắt */
+  overflow-x: visible;
+  /* chừa chỗ cho thanh cuộn để không che icon trong ô */
+  padding-right: 4px;
+  margin-right: -4px;
 }
 .login-form > button[type="submit"] {
-  margin-top: auto;            /* nút submit luôn dính đáy form */
+  margin-top: auto;            /* nút submit dính đáy khi form ngắn (đăng nhập) */
   flex-shrink: 0;
 }
 .field-floating { margin-bottom: 0; }

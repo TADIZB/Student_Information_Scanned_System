@@ -69,15 +69,14 @@ export default function Homepage({
             <span className="home-hero-accent">nhanh chóng, chính xác</span>
           </h2>
           <p className="home-hero-desc">
-            Tự động phát hiện thẻ qua camera, trích xuất thông tin bằng OCR và QR,
-            lưu lịch sử toàn bộ phiên làm việc — tất cả trong một nền tảng.
+            Tự động phát hiện thẻ qua camera, trích xuất thông tin bằng OCR và QR.
           </p>
           <div className="home-hero-cta">
             <button className="primary home-cta-btn" onClick={onQrClick}>
-              Quét QR ngay
+              QR Code
             </button>
             <button className="secondary home-cta-btn" onClick={onOcrClick}>
-              Thử OCR
+              Phân tích ảnh
             </button>
           </div>
           <div className="home-hero-stats">
@@ -128,8 +127,8 @@ export default function Homepage({
       {/* Features */}
       <section className="home-features">
         <div className="home-section-head">
-          <h3 className="home-section-title">Chọn chế độ quét</h3>
-          <p className="home-section-sub">Hai cách trích xuất thông tin thẻ sinh viên.</p>
+          <h3 className="home-section-title">Chọn chế độ Scan</h3>
+
         </div>
         <div className="home-features-grid">
           <button className="feature-card feature-card-btn" onClick={onQrClick}>
@@ -152,7 +151,7 @@ export default function Homepage({
               </svg>
             </div>
             <h3>OCR Nhận Dạng</h3>
-            <p>Trích xuất văn bản trên thẻ qua quy trình xử lý ảnh 7 bước.</p>
+            <p>Trích xuất văn bản trên thẻ qua quy trình xử lý ảnh.</p>
             <span className="feature-cta">Bắt đầu quét →</span>
           </button>
         </div>

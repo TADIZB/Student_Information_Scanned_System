@@ -1,6 +1,14 @@
 export { API_BASE, api } from "./client";
 export * from "./types";
-export { requestHustOtp, verifyHustOtp, registerLocal, login, logout, getMe } from "./auth";
+export {
+  requestLocalOtp,
+  registerLocal,
+  requestPasswordResetOtp,
+  resetPassword,
+  login,
+  logout,
+  getMe,
+} from "./auth";
 export { processScan } from "./scan";
 export type { OcrEngine } from "./scan";
 export { lookupStudent } from "./students";

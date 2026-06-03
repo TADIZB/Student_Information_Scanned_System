@@ -1,10 +1,15 @@
 import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
-import { login, registerLocal, requestHustOtp, verifyHustOtp } from "../api";
+import {
+  login,
+  registerLocal,
+  requestLocalOtp,
+  requestPasswordResetOtp,
+  resetPassword,
+} from "../api";
 
-type Mode = "login" | "register";
-type RegisterKind = "hust" | "local";
+type Mode = "login" | "register" | "forgot";
 type ToastKind = "success" | "error";
 
 interface Props {
@@ -14,7 +19,7 @@ interface Props {
 }
 
 const HUST_DOMAIN = "@sis.hust.edu.vn";
-const HUST_EMAIL_RE = /^[A-Za-z0-9._%+-]+@sis\.hust\.edu\.vn$/i;
+const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,50}$/;
 
 const COMMON_PASSWORDS = new Set([
@@ -62,7 +67,6 @@ const IconCalendar = () => (
 
 export default function Login({ onLogin, initialMode = "login", onBack }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
-  const [registerKind, setRegisterKind] = useState<RegisterKind>("hust");
 
   // Form fields
   const [identifier, setIdentifier] = useState("");
@@ -73,7 +77,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
 
-  // OTP đăng ký tài khoản trường (2 bước)
+  // OTP cho đăng ký tài khoản + quên mật khẩu (2 bước)
   const RESEND_COOLDOWN = 30; // giây tối thiểu giữa 2 lần gửi mã
   const [otpStep, setOtpStep] = useState<"request" | "verify">("request");
   const [code, setCode] = useState("");
@@ -96,7 +100,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   const firstFieldRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     firstFieldRef.current?.focus();
-  }, [mode, registerKind]);
+  }, [mode]);
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -105,8 +109,9 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Tick mỗi giây khi đang ở bước nhập mã (để đếm ngược hạn + cooldown gửi lại)
-  const inOtpVerify = mode === "register" && registerKind === "hust" && otpStep === "verify";
+  // Tick mỗi giây khi đang ở bước nhập mã (để đếm ngược hạn + cooldown gửi lại).
+  // Áp dụng cho mọi luồng OTP: đăng ký tài khoản, quên mật khẩu.
+  const inOtpVerify = mode !== "login" && otpStep === "verify";
   useEffect(() => {
     if (!inOtpVerify) return;
     setNowTs(Date.now());
@@ -143,7 +148,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   // ─── Validation realtime ─────────────────────────────────────────────────
   const v = {
     identifier: identifier.trim().length > 0,
-    email: HUST_EMAIL_RE.test(email.trim()),
+    email: EMAIL_RE.test(email.trim()),
     username: USERNAME_RE.test(username.trim()),
     password: password.length >= 6 && !COMMON_PASSWORDS.has(password.toLowerCase()),
     confirm: confirm.length > 0 && confirm === password,
@@ -201,12 +206,19 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     setMode(m);
     setPassword("");
     setConfirm("");
+    setCode("");
     setTouched({});
     setToast(null);
     resetOtp();
   };
-  const switchKind = (k: RegisterKind) => {
-    setRegisterKind(k);
+  // Vào màn quên mật khẩu (nhập tên đăng nhập → OTP về email đã đăng ký để đặt lại mật khẩu).
+  const goForgot = () => {
+    setMode("forgot");
+    setUsername("");
+    setPassword("");
+    setConfirm("");
+    setCode("");
+    setEmail("");
     setTouched({});
     setToast(null);
     resetOtp();
@@ -219,11 +231,18 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     setCapsLock(e.getModifierState && e.getModifierState("CapsLock"));
   };
 
+  // Gọi đúng API xin OTP theo luồng hiện tại (đăng ký tài khoản / quên mật khẩu).
+  const requestOtpForFlow = async (): Promise<{ expires_in: number }> => {
+    if (mode === "forgot") return requestPasswordResetOtp(username.trim());
+    return requestLocalOtp(username.trim(), email.trim());
+  };
+
   // ─── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setToast(null);
 
+    // ── Đăng nhập ──
     if (mode === "login") {
       if (!v.identifier) {
         setToast({ kind: "error", msg: "Vui lòng nhập tài khoản." });
@@ -243,20 +262,55 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
       return;
     }
 
-    // ── Đăng ký tài khoản trường — Bước 1: xin mã OTP ──
-    if (registerKind === "hust" && otpStep === "request") {
-      if (!v.email) {
-        setToast({ kind: "error", msg: `Email phải có đuôi ${HUST_DOMAIN}.` });
-        touch("email");
-        return;
+    // ── Bước 1 (mọi luồng OTP): kiểm tra định danh rồi gửi mã ──
+    if (otpStep === "request") {
+      // Quên mật khẩu: chỉ cần tên đăng nhập (BE tự tra ra email đăng ký).
+      if (mode === "forgot") {
+        if (!v.username) {
+          setToast({ kind: "error", msg: "Vui lòng nhập tên đăng nhập." });
+          touch("username");
+          return;
+        }
+      } else {
+        // Đăng ký: validate đầy đủ các trường hiển thị trước khi gửi mã.
+        if (!v.username) {
+          setToast({ kind: "error", msg: "Tên đăng nhập 3-50 ký tự, chỉ chữ/số/._-" });
+          touch("username");
+          return;
+        }
+        if (!v.email) {
+          setToast({ kind: "error", msg: "Email không hợp lệ." });
+          touch("email");
+          return;
+        }
+        if (!v.birthDate) {
+          setToast({ kind: "error", msg: "Ngày sinh không hợp lệ. Format: dd/mm/yyyy." });
+          touch("birthDate");
+          return;
+        }
+        if (!v.password) {
+          setToast({ kind: "error", msg: "Mật khẩu chưa đạt yêu cầu (≥6 ký tự, không phổ biến)." });
+          touch("password");
+          return;
+        }
+        if (!v.confirm) {
+          setToast({ kind: "error", msg: "Mật khẩu xác nhận không khớp." });
+          touch("confirm");
+          return;
+        }
       }
       setLoading(true);
       try {
-        const res = await requestHustOtp(email.trim());
+        const res = await requestOtpForFlow();
         startOtpTimers(res.expires_in);
         setOtpStep("verify");
         setCode("");
-        setToast({ kind: "success", msg: "Đã gửi mã xác nhận tới email của bạn." });
+        setToast({
+          kind: "success",
+          msg: mode === "forgot"
+            ? "Đã gửi mã xác nhận đến email đăng ký."
+            : "Đã gửi mã xác nhận tới email của bạn.",
+        });
       } catch (err: any) {
         setToast({ kind: "error", msg: err?.response?.data?.detail || "Không gửi được mã xác nhận." });
       } finally {
@@ -265,7 +319,12 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
       return;
     }
 
-    // Từ đây cần mật khẩu (đăng ký thường, hoặc bước 2 đăng ký trường)
+    // ── Bước 2 (verify): cần mã + mật khẩu mới + xác nhận ──
+    if (!v.code) {
+      setToast({ kind: "error", msg: "Mã xác nhận gồm 6 chữ số." });
+      touch("code");
+      return;
+    }
     if (!v.password) {
       setToast({ kind: "error", msg: "Mật khẩu chưa đạt yêu cầu (≥6 ký tự, không phổ biến)." });
       touch("password");
@@ -277,37 +336,25 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
       return;
     }
 
-    // ── Đăng ký tài khoản trường — Bước 2: xác minh mã + tạo tài khoản ──
-    if (registerKind === "hust") {
-      if (!v.code) {
-        setToast({ kind: "error", msg: "Mã xác nhận gồm 6 chữ số." });
-        touch("code");
-        return;
-      }
+    // ── Quên mật khẩu — Bước 2: đặt lại mật khẩu ──
+    if (mode === "forgot") {
       setLoading(true);
       try {
-        await verifyHustOtp({
-          email: email.trim(),
-          code: code.trim(),
-          password,
-          full_name: fullName.trim() || undefined,
-        });
-        setToast({ kind: "success", msg: "Đăng ký thành công." });
-        onLogin();
+        await resetPassword({ username: username.trim(), code: code.trim(), password });
+        const uname = username.trim();
+        switchMode("login");           // reset form (cũng xoá toast)…
+        setIdentifier(uname);
+        // …nên set toast SAU switchMode để thông báo không bị xoá.
+        setToast({ kind: "success", msg: "Đặt lại mật khẩu thành công. Hãy đăng nhập lại." });
       } catch (err: any) {
-        setToast({ kind: "error", msg: err?.response?.data?.detail || "Xác minh thất bại." });
+        setToast({ kind: "error", msg: err?.response?.data?.detail || "Đặt lại mật khẩu thất bại." });
       } finally {
         setLoading(false);
       }
       return;
     }
 
-    // ── Đăng ký tài khoản thường ──
-    if (!v.username) {
-      setToast({ kind: "error", msg: "Tên đăng nhập 3-50 ký tự, chỉ chữ/số/._-" });
-      touch("username");
-      return;
-    }
+    // ── Đăng ký tài khoản — Bước 2: xác minh mã + tạo tài khoản ──
     if (!v.birthDate) {
       setToast({ kind: "error", msg: "Ngày sinh không hợp lệ. Format: dd/mm/yyyy." });
       touch("birthDate");
@@ -315,12 +362,11 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     }
     setLoading(true);
     try {
-      let bdate: string | undefined;
-      if (birthDate.trim()) {
-        bdate = parseBirthDate(birthDate) || undefined;
-      }
+      const bdate = birthDate.trim() ? parseBirthDate(birthDate) || undefined : undefined;
       await registerLocal({
         username: username.trim(),
+        email: email.trim(),
+        code: code.trim(),
         password,
         full_name: fullName.trim() || undefined,
         birth_date: bdate,
@@ -334,12 +380,12 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     }
   };
 
-  // Gửi lại mã OTP (bước 2)
+  // Gửi lại mã OTP (bước 2) — dùng đúng API của luồng hiện tại.
   const handleResend = async () => {
     if (loading || resendCooldown > 0) return;
     setLoading(true);
     try {
-      const res = await requestHustOtp(email.trim());
+      const res = await requestOtpForFlow();
       startOtpTimers(res.expires_in);
       setCode("");
       setToast({ kind: "success", msg: "Đã gửi lại mã mới." });
@@ -373,25 +419,39 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
 
   const s = passwordStrength(password);
 
-  // Bước xin mã (đăng ký trường): chỉ hiện email + nút "Gửi mã".
-  const hustRequestStep = mode === "register" && registerKind === "hust" && otpStep === "request";
-  const showFullName = mode === "register" && !hustRequestStep;
-  const showPasswordFields = !hustRequestStep;          // login + local + hust verify
-  const showConfirm = mode === "register" && !hustRequestStep;
+  // Hai bước của mọi luồng OTP (đăng ký trường/thường, quên mật khẩu).
+  const otpRequestStep = mode !== "login" && otpStep === "request";
+  const otpVerifyStep = mode !== "login" && otpStep === "verify";
+
+  // Đăng ký: hiện ĐẦY ĐỦ các trường ở CẢ hai bước —
+  // OTP chỉ là ô mã xác nhận thêm vào cuối, không giấu trường nào.
+  const isRegister = mode === "register";
+  // Họ tên + ngày sinh: mọi luồng đăng ký (cả 2 bước).
+  const showFullName = isRegister;
+  const showBirthDate = isRegister;
+  // Mật khẩu: đăng nhập, hoặc đăng ký (cả 2 bước), hoặc bước xác minh quên mật khẩu.
+  const showPasswordFields = mode === "login" || isRegister || otpVerifyStep;
+  const showConfirm = isRegister || otpVerifyStep;
+  // Ô tên đăng nhập hiện ở: đăng ký (định danh tài khoản) + quên mật khẩu (tài khoản cần khôi phục).
+  const showUsername = isRegister || mode === "forgot";
+  // Email chỉ thu thập khi đăng ký; quên mật khẩu chỉ nhập tên đăng nhập.
+  const emailLabel = "Email (để nhận mã & khôi phục mật khẩu)";
 
   const submitLabel = loading
     ? mode === "login"
       ? "Đang đăng nhập..."
-      : hustRequestStep
+      : otpRequestStep
         ? "Đang gửi mã..."
-        : "Đang xử lý..."
+        : mode === "forgot"
+          ? "Đang đặt lại..."
+          : "Đang xử lý..."
     : mode === "login"
       ? "Đăng nhập"
-      : hustRequestStep
+      : otpRequestStep
         ? "Gửi mã xác nhận"
-        : registerKind === "hust"
-          ? "Xác nhận & đăng ký"
-          : "Đăng ký";
+        : mode === "forgot"
+          ? "Đặt lại mật khẩu"
+          : "Xác nhận & đăng ký";
 
   return (
     <div className="login-page">
@@ -413,7 +473,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
             </span>
           </div>
           <div className="login-hero-bottom">
-            <h2>Quét &amp; nhận dạng<br/>thẻ sinh viên</h2>
+            <h2>Quét &amp; nhận dạng<br />thẻ sinh viên</h2>
             <p>Hệ thống nhận dạng thẻ sinh viên thông minh.</p>
           </div>
         </aside>
@@ -426,22 +486,20 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
           </div>
           <p className="login-subtitle">Hệ thống nhận dạng thẻ sinh viên</p>
 
-          <div className="auth-tabs">
-            <button type="button" className={`auth-tab${mode === "login" ? " active" : ""}`} onClick={() => switchMode("login")}>
-              Đăng nhập
-            </button>
-            <button type="button" className={`auth-tab${mode === "register" ? " active" : ""}`} onClick={() => switchMode("register")}>
-              Đăng ký
-            </button>
-          </div>
-
-          {mode === "register" && (
-            <div className="auth-tabs auth-subtabs">
-              <button type="button" className={`auth-tab${registerKind === "hust" ? " active" : ""}`} onClick={() => switchKind("hust")}>
-                Tài khoản trường
+          {mode === "forgot" ? (
+            <div className="forgot-head" style={{ marginBottom: 12 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 20 }}>Quên mật khẩu</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>
+                Nhập tên đăng nhập — mã xác nhận sẽ được gửi tới email bạn đã đăng ký.
+              </p>
+            </div>
+          ) : (
+            <div className="auth-tabs">
+              <button type="button" className={`auth-tab${mode === "login" ? " active" : ""}`} onClick={() => switchMode("login")}>
+                Đăng nhập
               </button>
-              <button type="button" className={`auth-tab${registerKind === "local" ? " active" : ""}`} onClick={() => switchKind("local")}>
-                Tài khoản thường
+              <button type="button" className={`auth-tab${mode === "register" ? " active" : ""}`} onClick={() => switchMode("register")}>
+                Đăng ký
               </button>
             </div>
           )}
@@ -449,7 +507,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
           <form
             onSubmit={handleSubmit}
             className="login-form auth-pane"
-            key={`${mode}-${registerKind}`} /* trigger re-mount → animation chạy lại */
+            key={mode} /* trigger re-mount → animation chạy lại */
           >
             {/* ── Identity field ── */}
             {mode === "login" ? (
@@ -468,28 +526,54 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                 <label htmlFor="identifier">Tài khoản (email {HUST_DOMAIN} hoặc tên đăng nhập)</label>
                 {renderStatusIcon("identifier", identifier)}
               </div>
-            ) : registerKind === "hust" ? (
+            ) : (
               <>
-                <div className={fieldClass("email", email)}>
-                  <input
-                    ref={firstFieldRef}
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onBlur={() => touch("email")}
-                    placeholder=" "
-                    required
-                    autoComplete="email"
-                    disabled={inOtpVerify}
-                  />
-                  <label htmlFor="email">Email trường ({HUST_DOMAIN})</label>
-                  {!inOtpVerify && renderStatusIcon("email", email)}
-                  {touched.email && email && !v.email && (
-                    <div className="field-hint err">Email phải có đuôi {HUST_DOMAIN}.</div>
-                  )}
-                </div>
+                {/* Tên đăng nhập — đăng ký (định danh) + quên mật khẩu (tài khoản cần khôi phục) */}
+                {showUsername && (
+                  <div className={fieldClass("username", username)}>
+                    <input
+                      ref={firstFieldRef}
+                      id="username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      onBlur={() => touch("username")}
+                      placeholder=" "
+                      required
+                      autoComplete="username"
+                      disabled={inOtpVerify}
+                    />
+                    <label htmlFor="username">Tên đăng nhập</label>
+                    {!inOtpVerify && renderStatusIcon("username", username)}
+                    {touched.username && username && !v.username && (
+                      <div className="field-hint err">3-50 ký tự, chỉ chữ/số/._-</div>
+                    )}
+                  </div>
+                )}
 
+                {/* Email — chỉ khi đăng ký (quên mật khẩu chỉ cần tên đăng nhập) */}
+                {mode === "register" && (
+                  <div className={fieldClass("email", email)}>
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onBlur={() => touch("email")}
+                      placeholder=" "
+                      required
+                      autoComplete="email"
+                      disabled={inOtpVerify}
+                    />
+                    <label htmlFor="email">{emailLabel}</label>
+                    {!inOtpVerify && renderStatusIcon("email", email)}
+                    {touched.email && email && !v.email && (
+                      <div className="field-hint err">Email không hợp lệ.</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Mã xác nhận — bước verify của mọi luồng OTP */}
                 {inOtpVerify && (
                   <>
                     <div className={fieldClass("code", code)}>
@@ -520,7 +604,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                         onClick={() => { resetOtp(); setToast(null); }}
                         style={{ fontSize: 13, padding: "4px 0" }}
                       >
-                        ← Đổi email
+                        {mode === "forgot" ? "← Đổi tài khoản" : "← Đổi email"}
                       </button>
                       <button
                         type="button"
@@ -535,28 +619,9 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                   </>
                 )}
               </>
-            ) : (
-              <div className={fieldClass("username", username)}>
-                <input
-                  ref={firstFieldRef}
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  onBlur={() => touch("username")}
-                  placeholder=" "
-                  required
-                  autoComplete="username"
-                />
-                <label htmlFor="username">Tên đăng nhập</label>
-                {renderStatusIcon("username", username)}
-                {touched.username && username && !v.username && (
-                  <div className="field-hint err">3-50 ký tự, chỉ chữ/số/._-</div>
-                )}
-              </div>
             )}
 
-            {/* ── Họ và tên + Ngày sinh (register; tài khoản trường: chỉ ở bước 2) ── */}
+            {/* ── Họ và tên + Ngày sinh (chỉ khi đăng ký) ── */}
             {showFullName && (
               <>
                 <div className={`field-floating${fullName ? " has-value" : ""}`}>
@@ -571,7 +636,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                   <label htmlFor="fullName">Họ và tên</label>
                 </div>
 
-                {registerKind === "local" && (
+                {showBirthDate && (
                   <div className={fieldClass("birthDate", birthDate)}>
                     <input
                       id="birthDate"
@@ -605,56 +670,56 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
 
             {/* ── Password ── */}
             {showPasswordFields && (
-            <div className={fieldClass("password", password)}>
-              <input
-                id="password"
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onBlur={() => touch("password")}
-                onKeyDown={handleCapsCheck}
-                onKeyUp={handleCapsCheck}
-                placeholder=" "
-                required
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                style={{ paddingRight: 42 }}
-              />
-              <label htmlFor="password">Mật khẩu</label>
-              <span className="field-icon">
-                <button
-                  type="button"
-                  className="field-icon-btn"
-                  onClick={() => setShowPw((s) => !s)}
-                  title={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                  aria-label={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                >
-                  <IconEye off={showPw} />
-                </button>
-              </span>
-              {capsLock && (
-                <div className="field-hint warn">
-                  <IconAlert /> Caps Lock đang bật.
-                </div>
-              )}
-              {mode === "register" && password && (
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ height: 4, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
-                    <div style={{
-                      width: `${(s.score / 4) * 100}%`,
-                      height: "100%",
-                      background: s.color,
-                      transition: "width 0.25s, background 0.25s",
-                    }} />
+              <div className={fieldClass("password", password)}>
+                <input
+                  id="password"
+                  type={showPw ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onBlur={() => touch("password")}
+                  onKeyDown={handleCapsCheck}
+                  onKeyUp={handleCapsCheck}
+                  placeholder=" "
+                  required
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  style={{ paddingRight: 42 }}
+                />
+                <label htmlFor="password">{mode === "login" ? "Mật khẩu" : "Nhập mật khẩu"}</label>
+                <span className="field-icon">
+                  <button
+                    type="button"
+                    className="field-icon-btn"
+                    onClick={() => setShowPw((s) => !s)}
+                    title={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    aria-label={showPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  >
+                    <IconEye off={showPw} />
+                  </button>
+                </span>
+                {capsLock && (
+                  <div className="field-hint warn">
+                    <IconAlert /> Caps Lock đang bật.
                   </div>
-                  <div style={{ fontSize: 11, color: s.color, marginTop: 4, fontWeight: 600 }}>
-                    Độ mạnh: {s.label}
+                )}
+                {mode !== "login" && password && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ height: 4, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
+                      <div style={{
+                        width: `${(s.score / 4) * 100}%`,
+                        height: "100%",
+                        background: s.color,
+                        transition: "width 0.25s, background 0.25s",
+                      }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: s.color, marginTop: 4, fontWeight: 600 }}>
+                      Độ mạnh: {s.label}
+                    </div>
                   </div>
-                </div>
-              )}
-              {touched.password && password && !v.password && (
-                <div className="field-hint err">≥ 6 ký tự và không nằm trong danh sách phổ biến.</div>
-              )}
-            </div>
+                )}
+                {touched.password && password && !v.password && (
+                  <div className="field-hint err">≥ 6 ký tự và không nằm trong danh sách phổ biến.</div>
+                )}
+              </div>
             )}
 
             {/* ── Confirm password ── */}
@@ -689,10 +754,36 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
               </div>
             )}
 
+            {/* Link "Quên mật khẩu?" — chỉ ở màn đăng nhập */}
+            {mode === "login" && (
+              <div style={{ textAlign: "right", marginTop: -2 }}>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={goForgot}
+                  style={{ fontSize: 13, padding: "2px 0" }}
+                >
+                  Quên mật khẩu?
+                </button>
+              </div>
+            )}
+
             <button type="submit" className="primary full-width" disabled={loading} style={{ marginTop: 6 }}>
               {loading && <span className="btn-spinner" />}
               {submitLabel}
             </button>
+
+            {/* Quay lại đăng nhập — ở màn quên mật khẩu */}
+            {mode === "forgot" && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => switchMode("login")}
+                style={{ marginTop: 10, alignSelf: "center", fontSize: 13 }}
+              >
+                ← Quay lại đăng nhập
+              </button>
+            )}
           </form>
 
           {onBack && (

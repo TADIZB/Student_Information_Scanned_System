@@ -309,7 +309,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     fetch(imageSrc).then((r) => r.blob()).then(handleBlob);
   }, [handleBlob]);
 
-  // ── MSSV nhập tay ─────────────────────────────────────────────────────────
   const handleManualLookup = async () => {
     if (!manualMssv.trim()) return;
     setLookupBusy(true);
@@ -318,7 +317,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     try {
       const info = await lookupStudent(manualMssv.trim());
       setLookupResult(info);
-      if (info.scan_id) loadHistory();   // reload lịch sử nếu đã lưu được
+      if (info.scan_id) loadHistory();
     } catch (err: any) {
       setLookupError(err?.response?.data?.detail || "Không tìm thấy sinh viên.");
     } finally {
@@ -332,15 +331,15 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     const hasCccd = !!(info.so_cccd || info.dia_chi || info.ho_va_ten);
     const rows: [string, React.ReactNode][] = hasCccd
       ? [
-          ["Họ và tên", info.ho_va_ten || info.full_name || "—"],
-          ["Số CCCD", info.so_cccd || "—"],
-          ["Ngày sinh", info.ngay_sinh || info.birth_date || "—"],
-          ["Địa chỉ", info.dia_chi || "—"],
-        ]
+        ["Họ và tên", info.ho_va_ten || info.full_name || "—"],
+        ["Số CCCD", info.so_cccd || "—"],
+        ["Ngày sinh", info.ngay_sinh || info.birth_date || "—"],
+        ["Địa chỉ", info.dia_chi || "—"],
+      ]
       : [
-          ["Họ tên", info.full_name || "—"],
-          ["Ngày sinh", info.birth_date || "—"],
-        ];
+        ["Họ tên", info.full_name || "—"],
+        ["Ngày sinh", info.birth_date || "—"],
+      ];
     rows.push(
       ["Trường, Viện", info.school || "—"],
       ["Email", info.email || "—"],
@@ -380,8 +379,8 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
           {scanMode === "qr"
             ? "Đưa mã QR trên thẻ vào khung — hệ thống tự động phát hiện và đối chiếu."
             : ocrEngine === "gemini"
-              ? "Đưa CCCD vào khung rồi chụp — Gemini AI bóc tách thông tin."
-              : "Đưa CCCD vào khung rồi chụp — pipeline 7 bước trích xuất thông tin."}
+              ? "Đưa CCCD vào khung rồi chụp — AI bóc tách thông tin."
+              : "Đưa CCCD vào khung rồi chụp — pipeline trích xuất thông tin."}
         </p>
 
         {/* Chọn engine xử lý (chỉ OCR) */}
@@ -405,7 +404,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
               onClick={() => setOcrEngine("gemini")}
               disabled={busy}
             >
-              ✦ Gemini AI
+              ✦ AI
             </button>
           </div>
         )}
@@ -414,7 +413,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
       {/* ── Khung camera ───────────────────────────────────────────────────── */}
       <div className="webcam-wrapper">
         {busy && scanMode === "ocr" ? (
-          // Đang phân tích OCR: tắt cam, hiện ảnh đang xử lý
           analyzingPreview ? (
             <img src={analyzingPreview} alt="Đang phân tích" className="webcam-video" />
           ) : (

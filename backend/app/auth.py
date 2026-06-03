@@ -20,6 +20,9 @@ from .models import User
 HUST_EMAIL_DOMAIN = "@sis.hust.edu.vn"
 _HUST_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@sis\.hust\.edu\.vn$", re.IGNORECASE)
 
+# Email thường (dùng cho tài khoản thường + quên mật khẩu): định dạng email hợp lệ chung.
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+
 # Username: 3-50 ký tự, chỉ chữ/số/._-
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{3,50}$")
 
@@ -33,6 +36,10 @@ def is_hust_email(s: str) -> bool:
 
 def is_valid_username(s: str) -> bool:
     return bool(_USERNAME_RE.match(s.strip()))
+
+
+def is_valid_email(s: str) -> bool:
+    return bool(_EMAIL_RE.match(s.strip()))
 
 
 # ─── Mật khẩu ────────────────────────────────────────────────────────────────
@@ -98,7 +105,30 @@ def _user_to_dict(user: User) -> dict:
 
 # ─── Register ────────────────────────────────────────────────────────────────
 
-def register_hust(
+def validate_local_register(username: str, email: str, db: DBSession) -> tuple[str, str]:
+    """Kiểm tra tên đăng nhập + email (bắt buộc) cho tài khoản thường.
+
+    Trả về (username_norm, email_norm) đã chuẩn hoá. Raise nếu sai định dạng
+    hoặc đã bị dùng. Dùng chung cho bước xin OTP và bước xác minh tạo tài khoản.
+    """
+    uname = username.strip()
+    email_norm = email.strip().lower()
+    if not is_valid_username(uname):
+        raise HTTPException(
+            status_code=422,
+            detail="Tên đăng nhập phải dài 3-50 ký tự, chỉ gồm chữ/số/dấu chấm/gạch dưới/gạch ngang.",
+        )
+    if not is_valid_email(email_norm):
+        raise HTTPException(status_code=422, detail="Email không hợp lệ.")
+    if db.query(User).filter(User.username == uname).first():
+        raise HTTPException(status_code=409, detail="Tên đăng nhập đã tồn tại.")
+    if db.query(User).filter(User.email == email_norm).first():
+        raise HTTPException(status_code=409, detail="Email đã được sử dụng.")
+    return uname, email_norm
+
+
+def register_local(
+    username: str,
     email: str,
     password: str,
     full_name: str | None,
@@ -106,19 +136,12 @@ def register_hust(
     response: Response,
     db: DBSession,
 ) -> dict:
-    """Đăng ký bằng email trường @sis.hust.edu.vn. Tự set cookie để FE vào thẳng app."""
-    email_norm = email.strip().lower()
-    if not is_hust_email(email_norm):
-        raise HTTPException(
-            status_code=422,
-            detail=f"Email phải có đuôi {HUST_EMAIL_DOMAIN} (email trường Bách Khoa).",
-        )
+    """Đăng ký bằng username thường + email (đã xác thực OTP). Tự set cookie."""
+    uname, email_norm = validate_local_register(username, email, db)
     validate_password_strength(password)
 
-    if db.query(User).filter(User.email == email_norm).first():
-        raise HTTPException(status_code=409, detail="Email đã được sử dụng.")
-
     user = User(
+        username=uname,
         email=email_norm,
         password_hash=hash_password(password),
         full_name=(full_name or "").strip() or None,
@@ -132,37 +155,17 @@ def register_hust(
     return {"message": "Đăng ký thành công.", **_user_to_dict(user)}
 
 
-def register_local(
-    username: str,
-    password: str,
-    full_name: str | None,
-    birth_date: str | None,
-    response: Response,
-    db: DBSession,
-) -> dict:
-    """Đăng ký bằng username thường. Tự set cookie để FE vào thẳng app."""
-    uname = username.strip()
-    if not is_valid_username(uname):
-        raise HTTPException(
-            status_code=422,
-            detail="Tên đăng nhập phải dài 3-50 ký tự, chỉ gồm chữ/số/dấu chấm/gạch dưới/gạch ngang.",
-        )
-    validate_password_strength(password)
-
-    if db.query(User).filter(User.username == uname).first():
-        raise HTTPException(status_code=409, detail="Tên đăng nhập đã tồn tại.")
-
-    user = User(
-        username=uname,
-        password_hash=hash_password(password),
-        full_name=(full_name or "").strip() or None,
-        birth_date=(birth_date or "").strip() or None,
-    )
-    db.add(user)
+def reset_user_password(email: str, new_password: str, db: DBSession) -> User:
+    """Đặt lại mật khẩu cho tài khoản có email tương ứng (sau khi xác minh OTP)."""
+    email_norm = email.strip().lower()
+    validate_password_strength(new_password)
+    user = db.query(User).filter(User.email == email_norm).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản với email này.")
+    user.password_hash = hash_password(new_password)
     db.commit()
     db.refresh(user)
-    _set_user_cookie(response, user.id)
-    return {"message": "Đăng ký thành công.", **_user_to_dict(user)}
+    return user
 
 
 # ─── Login / Logout ──────────────────────────────────────────────────────────

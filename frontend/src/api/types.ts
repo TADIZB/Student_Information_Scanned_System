@@ -97,7 +97,8 @@ export interface RequestOtpResponse {
   expires_in: number; // giây tới khi mã hết hạn
 }
 
-export interface VerifyHustOtpInput {
+export interface RegisterLocalInput {
+  username: string;
   email: string;
   code: string;
   password: string;
@@ -105,11 +106,10 @@ export interface VerifyHustOtpInput {
   birth_date?: string;
 }
 
-export interface RegisterLocalInput {
+export interface ResetPasswordInput {
   username: string;
+  code: string;
   password: string;
-  full_name?: string;
-  birth_date?: string;
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────

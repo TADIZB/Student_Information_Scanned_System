@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 var BACKEND_ROUTES = [
-    "/register", "/login", "/logout", "/me", "/auth",
+    "/register", "/login", "/logout", "/me", "/auth", "/password",
     "/process-scan", "/scan-history",
     "/students", "/files", "/images",
 ];
