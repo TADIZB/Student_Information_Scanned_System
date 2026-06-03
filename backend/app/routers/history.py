@@ -11,7 +11,7 @@ from ..models import ScanHistory, StudentCard, User
 router = APIRouter(tags=["history"])
 
 
-# ─── Serve ảnh từ scan_history / student_cards ───────────────────────────────
+# Serve ảnh từ scan_history / student_cards
 
 @router.get("/images/scan/{scan_id}")
 def get_scan_image(
@@ -29,7 +29,7 @@ def get_scan_image(
     return Response(content=record.image_data, media_type=record.image_mime or "image/png")
 
 
-# ─── Lịch sử quét ────────────────────────────────────────────────────────────
+# Lịch sử quét
 
 @router.get("/scan-history")
 def scan_history(
@@ -90,6 +90,7 @@ def scan_detail(
             "school": card.school,
             "student_id": card.student_id,
             "email": card.email,
+            "study_status": card.study_status,
             "avatar_url": avatar_url,
         }
         if card

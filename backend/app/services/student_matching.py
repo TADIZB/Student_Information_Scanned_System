@@ -167,5 +167,6 @@ def _student_to_dict(s: Student, scan_id: str | None = None) -> dict:
         "school": s.school,
         "student_id": s.student_id,
         "email": s.email,
+        "study_status": s.study_status,
         "avatar_url": f"/images/avatar/student/{s.id}" if s.avatar_data else None,
     }

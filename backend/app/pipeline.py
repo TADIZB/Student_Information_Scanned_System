@@ -23,7 +23,9 @@ class WarpResult:
 
 def load_image(data: bytes) -> Image.Image:
     image = Image.open(io.BytesIO(data))
-    return ImageOps.exif_transpose(image)
+    # Luôn ép về RGB: ảnh 1-bit ('1'), grayscale ('L'), 'P' hay 'RGBA' sẽ khiến
+    # pil_to_cv() (cvtColor RGB→BGR) crash vì sai số kênh / dtype bool.
+    return ImageOps.exif_transpose(image).convert("RGB")
 
 
 def resize_image(image: Image.Image, max_dim: int = 2000) -> Image.Image:
@@ -192,6 +194,45 @@ def find_document_contour(image: np.ndarray) -> np.ndarray | None:
             break  # đã tìm thấy với set ngưỡng đầu tiên tốt
 
     return best_quad
+
+
+def find_content_bbox(image: np.ndarray, pad_ratio: float = 0.04) -> tuple[int, int, int, int] | None:
+    """Khoanh bounding box của khối nội dung chính (thẻ/giấy tờ) để cắt bỏ nền thừa.
+
+    Dùng mật độ biên (Canny) thay vì độ sáng: vùng giấy tờ dày chữ + có viền nên
+    đặc biên, còn nền (bàn, tay) thường mượt. Dilate mạnh để gộp text + viền thành
+    một khối, lấy contour lớn nhất → bounding box trục toạ độ + padding.
+
+    Trả (x1, y1, x2, y2). Trả None khi KHÔNG chắc chắn (khối quá nhỏ < 15% ảnh, hoặc
+    đã chiếm gần hết > 97% ảnh) → caller giữ nguyên ảnh, không bao giờ cắt nhầm.
+    """
+    h, w = image.shape[:2]
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    # (1) Bilateral filter: xoá vân nền (gỗ/vải/giấy) sinh biên rác mà GIỮ biên thẻ + chữ.
+    smooth = cv2.bilateralFilter(gray, 9, 60, 60)
+    # (2) CLAHE: kéo tương phản cục bộ để biên thẻ mờ / tương phản thấp vẫn hiện rõ.
+    enhanced = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(smooth)
+    # (3) Canny ngưỡng tự động theo median (thích ứng ảnh sáng/tối thay vì cố định 50/150).
+    blurred = cv2.GaussianBlur(enhanced, (5, 5), 0)
+    med = float(np.median(blurred))
+    lo = int(max(0, 0.66 * med))
+    hi = int(min(255, 1.33 * med))
+    edges = cv2.Canny(blurred, lo, hi)
+    # Kernel ~2.5% chiều ảnh (odd) để nối các nét chữ rời thành mảng đặc
+    kx = max(9, (w // 40) | 1)
+    ky = max(9, (h // 40) | 1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kx, ky))
+    dilated = cv2.dilate(edges, kernel, iterations=2)
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    c = max(contours, key=cv2.contourArea)
+    x, y, bw, bh = cv2.boundingRect(c)
+    area_ratio = (bw * bh) / float(h * w)
+    if area_ratio < 0.15 or area_ratio > 0.97:
+        return None  # quá nhỏ (không tin) hoặc gần full (không cần cắt)
+    px, py = int(pad_ratio * w), int(pad_ratio * h)
+    return (max(0, x - px), max(0, y - py), min(w, x + bw + px), min(h, y + bh + py))
 
 
 def _deskew(image: np.ndarray, max_angle: float = 15.0) -> np.ndarray:
@@ -431,8 +472,19 @@ def preprocess_cccd_pipeline(image_bgr: np.ndarray) -> Tuple[np.ndarray, Dict[st
     # Bước 1: Image Acquisition — ảnh đã được resize_image() trước khi gọi vào đây
     intermediates["step1_acquire"] = image_bgr
 
-    # Bước 2: ROI Detection — phát hiện & warp về dạng phẳng đứng
-    warped = warp_perspective(image_bgr)
+    # Bước 2 (mới): Bounding Box — khoanh khối nội dung, cắt bỏ nền thừa quanh giấy tờ.
+    # Giúp bước phát hiện 4 góc sạch hơn và cứu các ca warp thất bại (OCR trên ảnh đã
+    # crop gọn thay vì toàn khung). Không chắc chắn → giữ nguyên ảnh.
+    bbox = find_content_bbox(image_bgr)
+    if bbox:
+        x1, y1, x2, y2 = bbox
+        bbox_crop = image_bgr[y1:y2, x1:x2]
+    else:
+        bbox_crop = image_bgr
+    intermediates["step1b_bbox"] = bbox_crop
+
+    # Bước 3: ROI Detection — phát hiện & warp về dạng phẳng đứng (trên ảnh đã khoanh vùng)
+    warped = warp_perspective(bbox_crop)
     intermediates["step2_roi"] = warped.image
 
     # Bước 3: Noise Reduction (Median blur)

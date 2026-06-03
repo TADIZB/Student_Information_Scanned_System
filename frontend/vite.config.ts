@@ -26,7 +26,7 @@ export default defineConfig({
       includeAssets: ["logo.svg"],
       devOptions: { enabled: false },
       manifest: {
-        name: "TADIZB Scanner",
+        name: "TADIZB",
         short_name: "TADIZB",
         description: "Quét và tra cứu thẻ sinh viên",
         theme_color: "#dc2626",

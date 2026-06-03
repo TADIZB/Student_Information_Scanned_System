@@ -86,11 +86,6 @@ export default function Homepage({
             </div>
             <div className="home-stat-divider" />
             <div className="home-stat">
-              <strong>7</strong>
-              <span>Bước xử lý ảnh</span>
-            </div>
-            <div className="home-stat-divider" />
-            <div className="home-stat">
               <strong>100%</strong>
               <span>Lưu lịch sử</span>
             </div>

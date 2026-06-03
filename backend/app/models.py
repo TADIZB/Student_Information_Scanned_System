@@ -58,6 +58,7 @@ class Student(Base):
     birth_date = Column(String(20), nullable=True)   # Ngày sinh / D.O.B
     school = Column(String(200), nullable=True)      # Trường, Viện
     email = Column(String(200), nullable=True)       # Email
+    study_status = Column(Integer, nullable=True)    # Trạng thái HUST: 1=Đang học, 0=Nghỉ học
     avatar_data = Column(LargeBinary, nullable=True) # Ảnh đại diện (BYTEA)
     avatar_mime = Column(String(20), nullable=True)  # MIME type ảnh đại diện
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -92,9 +93,10 @@ class StudentCard(Base):
     id = Column(Uuid(), primary_key=True, default=uuid.uuid4)
     scan_id = Column(Uuid(), ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True)
     user_id = Column(Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    full_name = Column(String(200), nullable=True)    
-    birth_date = Column(String(20), nullable=True)    
-    school = Column(String(200), nullable=True)       
-    student_id = Column(String(20), nullable=True)    
-    email = Column(String(200), nullable=True)        
+    full_name = Column(String(200), nullable=True)
+    birth_date = Column(String(20), nullable=True)
+    school = Column(String(200), nullable=True)
+    student_id = Column(String(20), nullable=True)
+    email = Column(String(200), nullable=True)
+    study_status = Column(Integer, nullable=True)     # Snapshot trạng thái HUST lúc quét
     created_at = Column(DateTime, default=datetime.utcnow)

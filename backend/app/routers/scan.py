@@ -60,7 +60,8 @@ def _parse_qr_mssv(qr_data: str) -> dict:
 
     # 1. URL HUST ctsv (hash route): /card/<MSSV>/<HO_TEN>/<token>
     url_match = re.search(
-        r'ctsv\.hust\.edu\.vn/#/card/(?P<mssv>[A-Za-z0-9]+)/(?P<name>[^/?#]+)',
+        r'ctsv\.hust\.edu\.vn/#/card/(?P<mssv>[A-Za-z0-9]+)/(?P<name>[^/?#]+)'
+        r'(?:/(?P<token>[^/?#\s]+))?',
         qr_data,
         re.IGNORECASE,
     )
@@ -71,6 +72,11 @@ def _parse_qr_mssv(qr_data: str) -> dict:
             # Chuẩn hoá: "LE DUY HOANG" → "Le Duy Hoang"
             fields["full_name"] = raw_name.title() if raw_name.isupper() else raw_name
         fields["school"] = "Đại học Bách khoa Hà Nội"
+        # Token để gọi API HUST lấy thêm ngày sinh / trường / trạng thái.
+        # Trang HUST giải mã URL rồi bỏ hết dấu '_' khỏi token (base64), ta làm y hệt.
+        token = url_match.group("token")
+        if token:
+            fields["token"] = unquote(token).replace("_", "")
         return fields
 
     # 2. Key-value 'MSSV:...|HoTen:...'
@@ -140,20 +146,29 @@ async def process_scan(
 
             parsed = _parse_qr_mssv(qr_data)
             mssv = parsed.get("student_id")
+
             student = db.query(Student).filter(Student.student_id == mssv).first() if mssv else None
 
-            # MSSV chưa có trong bảng students nhưng QR có đủ MSSV → tự thêm mới
-            auto_created = False
-            if not student and mssv and parsed.get("full_name"):
-                student = Student(
-                    student_id=mssv,
-                    full_name=parsed.get("full_name"),
-                    school=parsed.get("school"),
-                    email=parsed.get("email"),
-                )
-                db.add(student)
-                db.flush()  # cấp UUID để StudentCard dưới đây tham chiếu được
-                auto_created = True
+            # Lưu MỌI sinh viên quét được vào bảng students dùng chung (toàn hệ thống).
+            # - Chưa có MSSV → tạo mới, kể cả khi QR chỉ có MSSV mà chưa có tên.
+            # - Đã có nhưng thiếu trường → bổ sung từ QR (KHÔNG ghi đè dữ liệu đã có).
+            student_changed = False
+            if mssv:
+                if not student:
+                    student = Student(
+                        student_id=mssv,
+                        full_name=parsed.get("full_name"),
+                        school=parsed.get("school"),
+                        email=parsed.get("email"),
+                    )
+                    db.add(student)
+                    db.flush()  # cấp UUID để StudentCard dưới đây tham chiếu được
+                    student_changed = True
+                else:
+                    for field in ("full_name", "school", "email"):
+                        if not getattr(student, field) and parsed.get(field):
+                            setattr(student, field, parsed.get(field))
+                            student_changed = True
 
             if student:
                 student_info = _student_to_dict(student)
@@ -164,6 +179,7 @@ async def process_scan(
                     "school": parsed.get("school"),
                     "student_id": mssv,
                     "email": parsed.get("email"),
+                    "study_status": None,
                     "avatar_url": None,
                 }
 
@@ -189,11 +205,12 @@ async def process_scan(
                     school=student_info["school"],
                     student_id=student_info["student_id"],
                     email=student_info["email"],
+                    study_status=student_info.get("study_status"),
                 ))
                 db.commit()
                 scan_id = str(scan_record.id)
-            elif auto_created:
-                # Không đăng nhập nhưng đã tạo Student mới → commit riêng
+            elif student_changed:
+                # Không đăng nhập nhưng đã tạo/bổ sung Student → commit riêng
                 db.commit()
 
             return {
@@ -351,14 +368,32 @@ async def process_scan(
                           "description": str(exc), "image_url": None})
             raise HTTPException(status_code=422, detail=f"Lỗi tiền xử lý: {exc}")
 
-        # Lưu ảnh ROI đã warp (step 2) để hiển thị + lưu DB
+        # Lưu ảnh ROI đã warp (step2_roi) để hiển thị + lưu DB
         warped_bgr = intermediates["step2_roi"]
         warped_bytes = _warped_to_png_bytes(warped_bgr)
 
-        # Bước 2: ROI detection
-        quad = find_document_contour(cv_image)
+        # Bước 2: Bounding Box — khoanh khối nội dung, cắt bỏ nền thừa
+        acq = intermediates.get("step1_acquire")
+        bbox_img = intermediates.get("step1b_bbox")
+        bbox_cropped = (
+            acq is not None and bbox_img is not None and bbox_img.shape[:2] != acq.shape[:2]
+        )
         steps.append({
-            "name": "2. Phát hiện ROI & tạo mặt nạ",
+            "name": "2. Khoanh vùng nội dung (Bounding Box)",
+            "status": "success" if bbox_cropped else "warning",
+            "description": (
+                f"Phát hiện khối giấy tờ theo mật độ biên (Canny + dilate) rồi cắt bỏ "
+                f"nền thừa → còn {bbox_img.shape[1]}×{bbox_img.shape[0]}px, giúp các bước sau chính xác hơn."
+                if bbox_cropped
+                else "Không thấy nền thừa rõ rệt — giữ nguyên toàn ảnh để không cắt nhầm."
+            ),
+            "image_url": None,
+        })
+
+        # Bước 3: ROI detection (trên ảnh đã khoanh Bounding Box)
+        quad = find_document_contour(bbox_img if bbox_img is not None else cv_image)
+        steps.append({
+            "name": "3. Phát hiện ROI & tạo mặt nạ",
             "status": "success" if quad is not None else "warning",
             "description": (
                 "Đã phát hiện 4 góc thẻ và crop về vùng quan tâm."
@@ -368,41 +403,41 @@ async def process_scan(
             "image_url": None,
         })
 
-        # Bước 3: Noise reduction
+        # Bước 4: Noise reduction
         steps.append({
-            "name": "3. Giảm nhiễu & lọc hình ảnh",
+            "name": "4. Giảm nhiễu & lọc hình ảnh",
             "status": "success",
             "description": "Grayscale + Median Blur (giữ biên ký tự, triệt tiêu hạt nhiễu nhỏ).",
             "image_url": None,
         })
 
-        # Bước 4: Flat-fielding
+        # Bước 5: Flat-fielding
         steps.append({
-            "name": "4. Hiệu chỉnh độ đồng nhất ánh sáng (Flat-fielding)",
+            "name": "5. Hiệu chỉnh độ đồng nhất ánh sáng (Flat-fielding)",
             "status": "success",
             "description": "Ước tính ma trận ánh sáng nền (Gaussian blur lớn) rồi chia ảnh / nền → triệt tiêu vùng cháy sáng (glare/hotspot).",
             "image_url": None,
         })
 
-        # Bước 5: Adaptive thresholding
+        # Bước 6: Adaptive thresholding
         steps.append({
-            "name": "5. Phân ngưỡng thích ứng cục bộ",
+            "name": "6. Phân ngưỡng thích ứng cục bộ",
             "status": "success",
             "description": "Adaptive Gaussian Threshold (blockSize=25, C=10) → ảnh nhị phân đen-trắng tuyệt đối.",
             "image_url": None,
         })
 
-        # Bước 6: Morphology refinement
+        # Bước 7: Morphology refinement
         steps.append({
-            "name": "6. Tinh chỉnh hình thái & làm sạch",
+            "name": "7. Tinh chỉnh hình thái & làm sạch",
             "status": "success",
             "description": "Opening (2×2) → loại vệt mực thừa, tách ký tự dính. Closing (2×2) → nối nét đứt, làm mượt biên.",
             "image_url": None,
         })
 
-        # Bước 7: Skew correction
+        # Bước 8: Skew correction
         steps.append({
-            "name": "7. Hiệu chỉnh độ lệch & biến đổi phối cảnh",
+            "name": "8. Hiệu chỉnh độ lệch & biến đổi phối cảnh",
             "status": "success",
             "description": "Hough transform tính góc nghiêng dòng chữ + Perspective transform đưa phôi thẻ về phẳng đứng.",
             "image_url": None,

@@ -28,7 +28,6 @@ const COMMON_PASSWORDS = new Set([
   "123456789", "1234567890", "12345", "1q2w3e4r", "p@ssw0rd",
 ]);
 
-// ─── Icons (inline SVG) ──────────────────────────────────────────────────
 const IconEye = ({ off }: { off?: boolean }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     {off ? (
@@ -77,12 +76,12 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
 
-  // OTP cho đăng ký tài khoản + quên mật khẩu (2 bước)
-  const RESEND_COOLDOWN = 30; // giây tối thiểu giữa 2 lần gửi mã
+  // OTP cho đăng ký tài khoản + quên mật khẩu 
+  const RESEND_COOLDOWN = 30;
   const [otpStep, setOtpStep] = useState<"request" | "verify">("request");
   const [code, setCode] = useState("");
-  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null); // ms
-  const [resendAt, setResendAt] = useState<number | null>(null);         // ms cho phép gửi lại
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
+  const [resendAt, setResendAt] = useState<number | null>(null);
   const [nowTs, setNowTs] = useState(Date.now());
 
   // UX state
@@ -93,7 +92,6 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ kind: ToastKind; msg: string } | null>(null);
 
-  // Popup lịch
   const [showCalendar, setShowCalendar] = useState(false);
 
   // Auto focus đúng input khi switch tab/kind
@@ -156,7 +154,6 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     code: /^\d{6}$/.test(code.trim()),
   };
 
-  // ─── Password strength ───────────────────────────────────────────────────
   const passwordStrength = (pw: string) => {
     let score = 0;
     if (pw.length >= 8) score++;
@@ -226,12 +223,11 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
 
   const touch = (name: string) => setTouched((t) => ({ ...t, [name]: true }));
 
-  // Caps lock detect
   const handleCapsCheck = (e: React.KeyboardEvent<HTMLInputElement>) => {
     setCapsLock(e.getModifierState && e.getModifierState("CapsLock"));
   };
 
-  // Gọi đúng API xin OTP theo luồng hiện tại (đăng ký tài khoản / quên mật khẩu).
+  // Gọi đúng API xin OTP theo luồng hiện tại.
   const requestOtpForFlow = async (): Promise<{ expires_in: number }> => {
     if (mode === "forgot") return requestPasswordResetOtp(username.trim());
     return requestLocalOtp(username.trim(), email.trim());
@@ -396,7 +392,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
     }
   };
 
-  // ─── Helpers UI ──────────────────────────────────────────────────────────
+  // ─── Helpers UI 
   const fieldClass = (name: keyof typeof v, value: string) => {
     const valid = v[name];
     const isTouched = touched[name];
@@ -426,7 +422,6 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   // Đăng ký: hiện ĐẦY ĐỦ các trường ở CẢ hai bước —
   // OTP chỉ là ô mã xác nhận thêm vào cuối, không giấu trường nào.
   const isRegister = mode === "register";
-  // Họ tên + ngày sinh: mọi luồng đăng ký (cả 2 bước).
   const showFullName = isRegister;
   const showBirthDate = isRegister;
   // Mật khẩu: đăng nhập, hoặc đăng ký (cả 2 bước), hoặc bước xác minh quên mật khẩu.
@@ -434,7 +429,6 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
   const showConfirm = isRegister || otpVerifyStep;
   // Ô tên đăng nhập hiện ở: đăng ký (định danh tài khoản) + quên mật khẩu (tài khoản cần khôi phục).
   const showUsername = isRegister || mode === "forgot";
-  // Email chỉ thu thập khi đăng ký; quên mật khẩu chỉ nhập tên đăng nhập.
   const emailLabel = "Email (để nhận mã & khôi phục mật khẩu)";
 
   const submitLabel = loading

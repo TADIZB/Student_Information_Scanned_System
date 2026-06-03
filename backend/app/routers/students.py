@@ -42,13 +42,12 @@ def lookup_student(
         db.add(StudentCard(
             scan_id=scan_record.id,
             user_id=current_user.id,
-            avatar_data=None,
-            avatar_mime=None,
             full_name=student.full_name,
             birth_date=student.birth_date,
             school=student.school,
             student_id=student.student_id,
             email=student.email,
+            study_status=student.study_status,
         ))
         db.commit()
         scan_id = str(scan_record.id)

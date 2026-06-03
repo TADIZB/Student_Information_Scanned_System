@@ -18,7 +18,6 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
 
-  // Tên hiển thị: ưu tiên username → full_name → email
   const displayName = (u: { username: string | null; full_name: string | null; email: string | null }) =>
     u.username || u.full_name || u.email;
 
@@ -40,7 +39,6 @@ export default function App() {
     try {
       await logout();
     } finally {
-      // Reload lại trang để xoá toàn bộ state, cache hình ảnh, lịch sử... của user vừa đăng xuất
       window.location.reload();
     }
   };
@@ -66,7 +64,6 @@ export default function App() {
     );
   }
 
-  // Trang chủ
   if (view === "home") {
     return (
       <Homepage
@@ -81,7 +78,6 @@ export default function App() {
     );
   }
 
-  // Trang hồ sơ
   if (view === "profile") {
     return (
       <div className="app">
@@ -106,7 +102,6 @@ export default function App() {
     );
   }
 
-  // App chính — truy cập được kể cả khi chưa đăng nhập
   return (
     <div className="app">
       <header className="topbar">

@@ -206,7 +206,8 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
         setLastResult(result);
 
-        if (scanMode === "ocr" && result.steps?.length) {
+        // Chỉ hiển thị các bước cho engine Tesseract. Engine AI (Gemini) chỉ ra kết quả.
+        if (scanMode === "ocr" && ocrEngine === "tesseract" && result.steps?.length) {
           animateSteps(result.steps);
         }
 
@@ -325,25 +326,38 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     }
   };
 
+  // Trạng thái học từ HUST: 1=Đang học, 0=Nghỉ học
+  const renderStatus = (s?: number | null): React.ReactNode => {
+    if (s === 1) return <strong style={{ color: "#16a34a" }}>Đang học</strong>;
+    if (s === 0) return <strong style={{ color: "#dc2626" }}>Nghỉ học</strong>;
+    return "—";
+  };
+
   // ── Render thông tin sinh viên / CCCD ─────────────────────────────────────
   const renderStudentInfo = (info: StudentInfo) => {
     // Có dữ liệu CCCD bóc được? (chỉ ở chế độ OCR)
     const hasCccd = !!(info.so_cccd || info.dia_chi || info.ho_va_ten);
-    const rows: [string, React.ReactNode][] = hasCccd
-      ? [
+    let rows: [string, React.ReactNode][];
+    if (hasCccd) {
+      rows = [
         ["Họ và tên", info.ho_va_ten || info.full_name || "—"],
         ["Số CCCD", info.so_cccd || "—"],
         ["Ngày sinh", info.ngay_sinh || info.birth_date || "—"],
         ["Địa chỉ", info.dia_chi || "—"],
-      ]
-      : [
+        ["Trường, Viện", info.school || "—"],
+        ["Email", info.email || "—"],
+        ["MSSV", renderMssvStyled(info.student_id)],
+      ];
+    } else {
+      // Thẻ sinh viên (QR): 5 ô theo yêu cầu
+      rows = [
         ["Họ tên", info.full_name || "—"],
         ["Ngày sinh", info.birth_date || "—"],
+        ["MSSV", renderMssvStyled(info.student_id)],
+        ["Trường, Viện", info.school || "—"],
+        ["Trạng thái", renderStatus(info.study_status)],
       ];
-    rows.push(
-      ["Trường, Viện", info.school || "—"],
-      ["Email", info.email || "—"],
-    );
+    }
     return (
       <div className="student-info">
         {info.avatar_url && (
@@ -355,10 +369,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
             <strong>{value}</strong>
           </div>
         ))}
-        <div className="info-row" key="MSSV">
-          <span>MSSV</span>
-          <strong>{renderMssvStyled(info.student_id)}</strong>
-        </div>
       </div>
     );
   };
@@ -620,6 +630,25 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
             <div className="raw-section">
               <p className="raw-label">QR Raw Data</p>
               {renderQrData(lastResult.qr_data)}
+            </div>
+          )}
+          {/* Thẻ gốc HUST: nhúng iframe để người dùng xem trực tiếp */}
+          {lastResult.scan_type === "qr" && extractUrl(lastResult.qr_data) && (
+            <div className="raw-section">
+              <div className="card-embed-head">
+                <p className="raw-label">Thẻ sinh viên gốc (HUST)</p>
+              </div>
+              <p className="card-embed-hint">
+                Đăng nhập ctsv trong khung dưới để xem thẻ sinh viên gốc.
+              </p>
+              <div className="card-embed-frame">
+                <iframe
+                  src={extractUrl(lastResult.qr_data)!.href}
+                  title="Thẻ sinh viên HUST"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
             </div>
           )}
           {lastResult.scan_type === "ocr" && lastResult.raw_text && (

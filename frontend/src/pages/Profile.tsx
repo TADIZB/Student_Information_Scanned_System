@@ -14,7 +14,6 @@ interface Props {
 
 const formatBirthForInput = (b: string | null | undefined): string => {
   if (!b) return "";
-  // chấp nhận yyyy-mm-dd hoặc dd/mm/yyyy
   if (/^\d{4}-\d{2}-\d{2}$/.test(b)) return b;
   const m = b.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
   if (!m) return "";
@@ -37,13 +36,11 @@ export default function Profile({ onBack }: Props) {
   const [error, setError] = useState("");
   const [toast, setToast] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
 
-  // Edit form
   const [editMode, setEditMode] = useState(false);
   const [fullName, setFullName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Avatar
   const [avatarBust, setAvatarBust] = useState<number>(Date.now());
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);

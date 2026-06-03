@@ -1,5 +1,3 @@
-// Tập trung tất cả interface dùng chung cho FE — tách riêng để các module gọn hơn.
-
 export interface LineData {
   text: string;
   bbox: [number, number, number, number];
@@ -19,6 +17,7 @@ export interface StudentInfo {
   school: string | null;
   student_id: string | null;
   email: string | null;
+  study_status?: number | null;
   avatar_url: string | null;
   // ─ CCCD fields (chỉ có khi scan_mode='ocr') ─
   // Schema chính theo nghiệp vụ
@@ -38,16 +37,14 @@ export interface ScanStep {
   name: string;
   status: "success" | "fail" | "warning" | "pending";
   description?: string | null;
-  image_url?: string | null;   // data URL minh hoạ kết quả của bước
+  image_url?: string | null;
 }
 
 export interface ExtractedInfo {
-  // Schema CCCD theo nghiệp vụ (4 trường chính)
   ho_va_ten: string | null;
   so_cccd: string | null;
   ngay_sinh: string | null;
   dia_chi: string | null;
-  // Trường phụ
   sex?: string | null;
   nationality?: string | null;
   hometown?: string | null;
@@ -82,7 +79,7 @@ export interface ScanDetail extends ScanRecord {
   student_info: StudentInfo | null;
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
+//Auth
 
 export interface AuthUser {
   id: string;
@@ -94,7 +91,7 @@ export interface AuthUser {
 
 export interface RequestOtpResponse {
   message: string;
-  expires_in: number; // giây tới khi mã hết hạn
+  expires_in: number;
 }
 
 export interface RegisterLocalInput {
@@ -112,7 +109,7 @@ export interface ResetPasswordInput {
   password: string;
 }
 
-// ─── Profile ──────────────────────────────────────────────────────────────────
+//Profile
 
 export interface ProfileUser {
   id: string;
@@ -143,7 +140,7 @@ export interface UpdateProfileInput {
   birth_date?: string;
 }
 
-// ─── Lookup ───────────────────────────────────────────────────────────────────
+//Lookup
 
 export interface LookupResult extends StudentInfo {
   scan_id: string | null;
