@@ -7,8 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session as DBSession
 
-logger = logging.getLogger(__name__)
-
 from ..auth import (
     get_current_user,
     is_hust_email,
@@ -33,6 +31,8 @@ from ..schemas import (
 from ..services.email_sender import send_otp_email
 from ..services.hust_sso import check_login
 from ..services.otp_service import OTP_TTL_MINUTES, create_otp, verify_otp
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["auth"])
 
