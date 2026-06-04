@@ -146,6 +146,21 @@ def _match_student_by_cccd(
                 best = (s, score, note)
                 continue
 
+        # Strategy 2.5: CCCD CÓ ngày sinh nhưng SV trong DB CHƯA có ngày sinh
+        # (vd: sinh viên được tạo khi quét QR — URL HUST không kèm ngày sinh).
+        # Không thể xác nhận bằng ngày sinh nên đòi tên khớp RẤT cao, điểm thấp
+        # hơn các nhánh có xác nhận ngày sinh. Chỉ chạy khi s_birth rỗng nên KHÔNG
+        # khớp nhầm trường hợp hai ngày sinh khác nhau.
+        if target_birth and not s_birth:
+            if sc_dia >= 90:
+                if best is None or sc_dia > best[1]:
+                    best = (s, sc_dia, f"khớp tên có dấu ({sc_dia}%), SV chưa có ngày sinh để xác nhận")
+                continue
+            if sc_strip >= 92:
+                if best is None or sc_strip > best[1]:
+                    best = (s, sc_strip, f"khớp tên không dấu ({sc_strip}%), SV chưa có ngày sinh để xác nhận")
+                continue
+
         # Strategy 3: chỉ tên (yếu hơn nếu không có birth để xác nhận)
         if not target_birth:
             if sc_dia >= 90:

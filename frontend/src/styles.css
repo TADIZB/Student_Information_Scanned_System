@@ -1866,6 +1866,53 @@ button.ghost.small {
   padding: 14px;
 }
 
+.face-match {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(18, 20, 31, 0.04);
+  border-left: 4px solid #6b7280;
+  border-radius: 10px;
+}
+
+.face-match-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.face-match-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.face-match-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.face-match-conf {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.face-match-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 .raw-label {
   font-size: 12px;
   font-weight: 600;

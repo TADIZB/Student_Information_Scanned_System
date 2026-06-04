@@ -32,6 +32,23 @@ với đúng các khoá sau (không thêm khoá khác; trường nào không có
 Chỉ in ra JSON, không giải thích, không bọc trong markdown."""
 
 
+_FACE_PROMPT = """Bạn nhận được HAI ảnh:
+- Ảnh 1: giấy tờ tuỳ thân (CCCD/CMND) có in ảnh chân dung của chủ thẻ.
+- Ảnh 2: ảnh đại diện của một sinh viên trong hồ sơ trường.
+
+Hãy xác định khuôn mặt người trong ảnh chân dung ở Ảnh 1 và so sánh với khuôn
+mặt ở Ảnh 2 để kết luận có phải CÙNG MỘT NGƯỜI hay không.
+
+Trả về DUY NHẤT một object JSON với đúng các khoá sau:
+- ket_qua: một trong "khop" | "khong_khop" | "khong_chac"
+- do_tin_cay: số nguyên 0-100 (độ tin cậy của kết luận)
+- nhan_xet: giải thích ngắn gọn bằng tiếng Việt (điểm giống/khác, chất lượng ảnh)
+
+Chỉ in ra JSON, không giải thích thêm, không bọc trong markdown."""
+
+_FACE_VERDICTS = ("khop", "khong_khop", "khong_chac")
+
+
 def _client():
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
@@ -96,3 +113,50 @@ def extract_cccd_with_gemini(image_bytes: bytes, mime: str = "image/jpeg") -> tu
         {k: v for k, v in cccd.items() if v}, ensure_ascii=False, indent=2
     )
     return raw_text, cccd
+
+
+def compare_faces(
+    card_bytes: bytes,
+    card_mime: str,
+    avatar_bytes: bytes,
+    avatar_mime: str,
+) -> dict:
+    """So khớp khuôn mặt trên giấy tờ (card) với ảnh đại diện sinh viên (avatar).
+
+    Trả về dict {ket_qua, do_tin_cay, nhan_xet}. KHÔNG raise: đây là bước phụ,
+    lỗi Gemini chỉ làm trường này thành 'loi' chứ không hỏng cả lần quét.
+    """
+    from google.genai import types
+
+    try:
+        client = _client()
+        model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+        resp = client.models.generate_content(
+            model=model,
+            contents=[
+                "Ảnh 1 (giấy tờ tuỳ thân):",
+                types.Part.from_bytes(data=card_bytes, mime_type=card_mime or "image/jpeg"),
+                "Ảnh 2 (ảnh đại diện sinh viên):",
+                types.Part.from_bytes(data=avatar_bytes, mime_type=avatar_mime or "image/jpeg"),
+                _FACE_PROMPT,
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.0,
+            ),
+        )
+        data = _parse_json(resp.text)
+    except Exception as exc:  # noqa: BLE001 — bước phụ, nuốt lỗi
+        logger.error("So khớp khuôn mặt Gemini thất bại: %s", exc)
+        return {"ket_qua": "loi", "do_tin_cay": 0,
+                "nhan_xet": "Không thực hiện được so khớp khuôn mặt."}
+
+    verdict = data.get("ket_qua")
+    if verdict not in _FACE_VERDICTS:
+        verdict = "khong_chac"
+    try:
+        conf = int(float(data.get("do_tin_cay") or 0))
+    except (ValueError, TypeError):
+        conf = 0
+    conf = max(0, min(100, conf))
+    return {"ket_qua": verdict, "do_tin_cay": conf, "nhan_xet": data.get("nhan_xet") or ""}

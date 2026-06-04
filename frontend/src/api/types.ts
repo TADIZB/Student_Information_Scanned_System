@@ -52,6 +52,12 @@ export interface ExtractedInfo {
   expiry?: string | null;
 }
 
+export interface FaceMatch {
+  ket_qua: "khop" | "khong_khop" | "khong_chac" | "loi";
+  do_tin_cay: number;
+  nhan_xet: string;
+}
+
 export interface ScanResult {
   scan_id: string;
   scan_type: "qr" | "ocr";
@@ -63,6 +69,7 @@ export interface ScanResult {
   blocks: BlockData[];
   raw_text: string | null;
   extracted_info: ExtractedInfo | null;
+  face_match?: FaceMatch | null;
 }
 
 export interface ScanRecord {

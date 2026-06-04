@@ -5,6 +5,7 @@ import {
   API_BASE,
   getScanDetail,
   getScanHistory,
+  FaceMatch,
   lookupStudent,
   LookupResult,
   OcrEngine,
@@ -373,6 +374,31 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     );
   };
 
+  // ── Render kết quả so khớp khuôn mặt (Gemini) ─────────────────────────────
+  const FACE_MATCH_META: Record<FaceMatch["ket_qua"], { label: string; color: string; icon: string }> = {
+    khop: { label: "Cùng một người", color: "#16a34a", icon: "✓" },
+    khong_khop: { label: "Khác người", color: "#dc2626", icon: "✗" },
+    khong_chac: { label: "Không chắc chắn", color: "#d97706", icon: "?" },
+    loi: { label: "Lỗi so khớp", color: "#6b7280", icon: "!" },
+  };
+  const renderFaceMatch = (fm: FaceMatch) => {
+    const meta = FACE_MATCH_META[fm.ket_qua] ?? FACE_MATCH_META.khong_chac;
+    return (
+      <div className="face-match" style={{ borderLeftColor: meta.color }}>
+        <div className="face-match-head">
+          <span className="face-match-icon" style={{ background: meta.color }}>{meta.icon}</span>
+          <span className="face-match-label" style={{ color: meta.color }}>
+            So khớp khuôn mặt: {meta.label}
+          </span>
+          {fm.ket_qua !== "loi" && (
+            <span className="face-match-conf">độ tin cậy {fm.do_tin_cay}%</span>
+          )}
+        </div>
+        {fm.nhan_xet && <p className="face-match-note">{fm.nhan_xet}</p>}
+      </div>
+    );
+  };
+
   return (
     <div className="scanner-page">
 
@@ -626,6 +652,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
             )}
             {lastResult.student_info && renderStudentInfo(lastResult.student_info)}
           </div>
+          {lastResult.face_match && renderFaceMatch(lastResult.face_match)}
           {lastResult.qr_data && (
             <div className="raw-section">
               <p className="raw-label">QR Raw Data</p>

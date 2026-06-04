@@ -28,7 +28,8 @@ from ..pipeline import (
     resize_image,
     warp_perspective,
 )
-from ..services.gemini_ocr import extract_cccd_with_gemini
+from ..services.gemini_ocr import compare_faces, extract_cccd_with_gemini
+from ..services.hust_image import fetch_student_avatar
 from ..services.student_matching import _match_student_by_cccd, _student_to_dict
 
 router = APIRouter(tags=["scan"])
@@ -170,6 +171,13 @@ async def process_scan(
                             setattr(student, field, parsed.get(field))
                             student_changed = True
 
+                # Bổ sung ảnh đại diện từ API ảnh công khai của HUST (chỉ khi chưa có).
+                if not student.avatar_data:
+                    avatar = fetch_student_avatar(mssv)
+                    if avatar:
+                        student.avatar_data, student.avatar_mime = avatar
+                        student_changed = True
+
             if student:
                 student_info = _student_to_dict(student)
             else:
@@ -298,6 +306,38 @@ async def process_scan(
                     "image_url": None,
                 })
 
+            # ── So khớp khuôn mặt: ảnh CCCD vs ảnh đại diện sinh viên ─────────
+            face_match = None
+            if student and student.avatar_data:
+                face_match = compare_faces(
+                    gemini_bytes, "image/jpeg",
+                    student.avatar_data, student.avatar_mime or "image/jpeg",
+                )
+                _fm_status = {
+                    "khop": "success", "khong_khop": "fail",
+                    "khong_chac": "warning", "loi": "fail",
+                }.get(face_match["ket_qua"], "warning")
+                _fm_label = {
+                    "khop": "Cùng một người", "khong_khop": "KHÁC người",
+                    "khong_chac": "Không chắc chắn", "loi": "Lỗi so khớp",
+                }.get(face_match["ket_qua"], "Không chắc chắn")
+                g_steps.append({
+                    "name": "4. So khớp khuôn mặt (Gemini)",
+                    "status": _fm_status,
+                    "description": (
+                        f"{_fm_label} — độ tin cậy {face_match['do_tin_cay']}%. "
+                        f"{face_match['nhan_xet']}"
+                    ),
+                    "image_url": None,
+                })
+            elif student:
+                g_steps.append({
+                    "name": "4. So khớp khuôn mặt (Gemini)",
+                    "status": "warning",
+                    "description": "Sinh viên chưa có ảnh đại diện để so khớp khuôn mặt.",
+                    "image_url": None,
+                })
+
             scan_id = uuid4().hex
             if current_user:
                 scan_record = ScanHistory(
@@ -335,6 +375,7 @@ async def process_scan(
                 "blocks": [],
                 "raw_text": raw_text,
                 "extracted_info": cccd,
+                "face_match": face_match,
             }
 
         # ════════════════════════════════════════════════════════════════════
