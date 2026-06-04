@@ -36,7 +36,6 @@ def get_profile(
     db: DBSession = Depends(get_db),
 ) -> dict:
     """Trả về thông tin user + stats các loại scan."""
-    # Đếm theo scan_type
     rows = (
         db.query(ScanHistory.scan_type, func.count(ScanHistory.id))
         .filter(ScanHistory.user_id == current_user.id)

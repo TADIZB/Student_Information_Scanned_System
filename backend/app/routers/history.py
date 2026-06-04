@@ -71,7 +71,6 @@ def scan_detail(
 
     card = db.query(StudentCard).filter(StudentCard.scan_id == scan_id).first()
 
-    # Avatar chỉ lấy từ bảng students (nếu khớp sinh viên có ảnh đại diện)
     avatar_url: str | None = None
     if record.matched_student_id:
         avatar_url = f"/images/avatar/student/{record.matched_student_id}"

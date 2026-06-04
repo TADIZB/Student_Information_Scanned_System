@@ -39,3 +39,5 @@ desktop.ini
 
 .claude/
 skills-lock.json
+
+microsoft_login.py

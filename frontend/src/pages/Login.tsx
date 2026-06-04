@@ -16,9 +16,10 @@ interface Props {
   onLogin: () => void;
   initialMode?: Mode;
   onBack?: () => void;
+  /** Điều hướng sang trang đăng nhập bằng tài khoản Microsoft (kèm email gợi ý nếu có). */
+  onMicrosoftLogin?: (prefillEmail?: string) => void;
 }
 
-const HUST_DOMAIN = "@sis.hust.edu.vn";
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,50}$/;
 
@@ -55,6 +56,14 @@ const IconAlert = () => (
     <line x1="12" y1="16" x2="12.01" y2="16" />
   </svg>
 );
+const IconMicrosoft = () => (
+  <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden>
+    <rect x="1" y="1" width="10" height="10" fill="#f25022" />
+    <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
+    <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
+    <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
+  </svg>
+);
 const IconCalendar = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <rect x="3" y="4" width="18" height="18" rx="3" />
@@ -64,7 +73,7 @@ const IconCalendar = () => (
   </svg>
 );
 
-export default function Login({ onLogin, initialMode = "login", onBack }: Props) {
+export default function Login({ onLogin, initialMode = "login", onBack, onMicrosoftLogin }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
   // Form fields
@@ -415,21 +424,16 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
 
   const s = passwordStrength(password);
 
-  // Hai bước của mọi luồng OTP (đăng ký trường/thường, quên mật khẩu).
   const otpRequestStep = mode !== "login" && otpStep === "request";
   const otpVerifyStep = mode !== "login" && otpStep === "verify";
 
-  // Đăng ký: hiện ĐẦY ĐỦ các trường ở CẢ hai bước —
-  // OTP chỉ là ô mã xác nhận thêm vào cuối, không giấu trường nào.
   const isRegister = mode === "register";
   const showFullName = isRegister;
   const showBirthDate = isRegister;
-  // Mật khẩu: đăng nhập, hoặc đăng ký (cả 2 bước), hoặc bước xác minh quên mật khẩu.
   const showPasswordFields = mode === "login" || isRegister || otpVerifyStep;
   const showConfirm = isRegister || otpVerifyStep;
-  // Ô tên đăng nhập hiện ở: đăng ký (định danh tài khoản) + quên mật khẩu (tài khoản cần khôi phục).
   const showUsername = isRegister || mode === "forgot";
-  const emailLabel = "Email (để nhận mã & khôi phục mật khẩu)";
+  const emailLabel = "Email";
 
   const submitLabel = loading
     ? mode === "login"
@@ -501,7 +505,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
           <form
             onSubmit={handleSubmit}
             className="login-form auth-pane"
-            key={mode} /* trigger re-mount → animation chạy lại */
+            key={mode}
           >
             {/* ── Identity field ── */}
             {mode === "login" ? (
@@ -517,7 +521,7 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
                   required
                   autoComplete="username"
                 />
-                <label htmlFor="identifier">Tài khoản (email {HUST_DOMAIN} hoặc tên đăng nhập)</label>
+                <label htmlFor="identifier">Tên đăng nhập hoặc email</label>
                 {renderStatusIcon("identifier", identifier)}
               </div>
             ) : (
@@ -766,6 +770,26 @@ export default function Login({ onLogin, initialMode = "login", onBack }: Props)
               {loading && <span className="btn-spinner" />}
               {submitLabel}
             </button>
+
+            {/* Đăng nhập bằng tài khoản trường (Microsoft/HUST SSO) — chỉ ở màn đăng nhập */}
+            {mode === "login" && (
+              <>
+                <div className="ms-divider">
+                  <span>hoặc</span>
+                </div>
+                <button
+                  type="button"
+                  className="ms-login-btn"
+                  onClick={() =>
+                    onMicrosoftLogin?.(identifier.includes("@") ? identifier.trim() : undefined)
+                  }
+                  disabled={loading}
+                >
+                  <IconMicrosoft />
+                  Đăng nhập bằng tài khoản Microsoft
+                </button>
+              </>
+            )}
 
             {/* Quay lại đăng nhập — ở màn quên mật khẩu */}
             {mode === "forgot" && (

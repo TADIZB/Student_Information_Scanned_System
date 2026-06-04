@@ -28,7 +28,7 @@ def test_verify_handles_bad_hash():
 
 def test_is_common_password():
     assert auth_module.is_common_password("123456") is True
-    assert auth_module.is_common_password("Password") is True  # case-insensitive
+    assert auth_module.is_common_password("Password") is True 
     assert auth_module.is_common_password("matkhau-cuc-manh-2026") is False
 
 
@@ -45,14 +45,13 @@ def test_validate_password_strength_common():
 
 
 def test_validate_password_strength_ok():
-    # Không raise
     auth_module.validate_password_strength("matkhau-cuc-manh-2026")
 
 
 def test_is_hust_email():
     assert auth_module.is_hust_email("abc@sis.hust.edu.vn") is True
     assert auth_module.is_hust_email("abc.def@SIS.HUST.EDU.VN") is True
-    assert auth_module.is_hust_email("abc@hust.edu.vn") is False    # thiếu "sis."
+    assert auth_module.is_hust_email("abc@hust.edu.vn") is False    
     assert auth_module.is_hust_email("abc@gmail.com") is False
     assert auth_module.is_hust_email("abc@xsis.hust.edu.vn") is False
     assert auth_module.is_hust_email("@sis.hust.edu.vn") is False

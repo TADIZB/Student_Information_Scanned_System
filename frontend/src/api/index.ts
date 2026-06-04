@@ -6,6 +6,7 @@ export {
   requestPasswordResetOtp,
   resetPassword,
   login,
+  loginMicrosoft,
   logout,
   getMe,
 } from "./auth";

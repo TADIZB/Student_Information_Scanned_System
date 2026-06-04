@@ -901,6 +901,49 @@ button:disabled {
   box-shadow: 0 4px 12px rgba(153, 27, 27, 0.16);
 }
 
+/* ── Đăng nhập bằng tài khoản Microsoft ── */
+.ms-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ms-divider::before,
+.ms-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(18, 20, 31, 0.12);
+}
+
+.ms-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  color: #2f2f2f;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ms-login-btn:hover:not(:disabled) {
+  background: #f7f7f7;
+  border-color: #9ca3af;
+  box-shadow: 0 2px 8px rgba(15, 20, 44, 0.08);
+}
+.ms-login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .auth-tab:not(.active):hover {
   color: var(--accent);
 }

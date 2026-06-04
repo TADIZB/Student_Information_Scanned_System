@@ -35,7 +35,7 @@ from ..services.student_matching import _match_student_by_cccd, _student_to_dict
 router = APIRouter(tags=["scan"])
 
 
-# ─── Helpers nội bộ ──────────────────────────────────────────────────────────
+# Helpers nội bộ 
 
 def _warped_to_png_bytes(warped_image: np.ndarray) -> bytes:
     arr = np.clip(warped_image, 0, 255).astype("uint8")
@@ -96,7 +96,7 @@ def _parse_qr_mssv(qr_data: str) -> dict:
     return fields
 
 
-# ─── Endpoint chính ──────────────────────────────────────────────────────────
+# Endpoint chính 
 
 @router.post("/process-scan", dependencies=[Depends(rate_limit_process_scan)])
 async def process_scan(
@@ -121,9 +121,6 @@ async def process_scan(
     try:
         raw_data = await file.read()
 
-        # ════════════════════════════════════════════════════════════════════
-        #  CHẾ ĐỘ QR
-        # ════════════════════════════════════════════════════════════════════
         if scan_mode == "qr":
             image = resize_image(load_image(raw_data))
             warped = warp_perspective(pil_to_cv(image))
@@ -131,7 +128,6 @@ async def process_scan(
 
             qr_data = detect_qr(warped.image)
             if not qr_data:
-                # Không có QR trong frame — trả về im lặng để auto-scan tiếp tục
                 return {
                     "scan_id": "",
                     "scan_type": "qr",
@@ -234,9 +230,6 @@ async def process_scan(
                 "extracted_info": None,
             }
 
-        # ════════════════════════════════════════════════════════════════════
-        #  CHẾ ĐỘ OCR bằng GEMINI (engine='gemini') — gửi ảnh, nhận JSON
-        # ════════════════════════════════════════════════════════════════════
         if engine == "gemini":
             # Chuẩn hoá + nén ảnh trước khi gửi (giảm payload, ổn định mime)
             image = resize_image(load_image(raw_data))
@@ -306,7 +299,7 @@ async def process_scan(
                     "image_url": None,
                 })
 
-            # ── So khớp khuôn mặt: ảnh CCCD vs ảnh đại diện sinh viên ─────────
+            # So khớp khuôn mặt: ảnh CCCD vs ảnh đại diện sinh viên
             face_match = None
             if student and student.avatar_data:
                 face_match = compare_faces(
@@ -378,9 +371,7 @@ async def process_scan(
                 "face_match": face_match,
             }
 
-        # ════════════════════════════════════════════════════════════════════
-        #  CHẾ ĐỘ OCR – xử lý từng bước, trả steps + match_result
-        # ════════════════════════════════════════════════════════════════════
+        
         steps: List[Dict[str, Any]] = []
 
         # Bước 1: Tải & tiền xử lý
@@ -401,7 +392,6 @@ async def process_scan(
                           "description": "Không đọc được file ảnh.", "image_url": None})
             raise HTTPException(status_code=422, detail="Không đọc được file ảnh.")
 
-        # Pipeline 7 bước CCCD ════════════════════════════════════════════════
         try:
             cleaned, intermediates = preprocess_cccd_pipeline(cv_image)
         except Exception as exc:

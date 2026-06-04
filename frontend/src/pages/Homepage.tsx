@@ -5,7 +5,6 @@ interface Props {
   onRegisterClick: () => void;
   onQrClick: () => void;
   onOcrClick: () => void;
-  // Auth state — Homepage cần biết để hiển thị topbar đúng
   username: string | null;
   onProfileClick?: () => void;
   onLogoutClick?: () => void;

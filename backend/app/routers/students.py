@@ -55,7 +55,7 @@ def lookup_student(
     return {**result, "scan_id": scan_id}
 
 
-# ─── Serve ảnh đại diện từ bảng students ─────────────────────────────────────
+# Serve ảnh đại diện từ bảng students 
 
 @router.get("/images/avatar/student/{student_uuid}")
 def get_student_avatar(student_uuid: str, db: DBSession = Depends(get_db)):

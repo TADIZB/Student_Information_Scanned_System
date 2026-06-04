@@ -5,7 +5,13 @@ from pydantic import BaseModel
 
 
 class LoginPayload(BaseModel):
-    identifier: str           # email HUST hoặc username thường
+    identifier: str         
+    password: str
+
+
+class MicrosoftLoginPayload(BaseModel):
+    """Đăng nhập bằng tài khoản trường (Microsoft/HUST SSO) — xác thực qua sso.hust.edu.vn."""
+    email: str               
     password: str
 
 

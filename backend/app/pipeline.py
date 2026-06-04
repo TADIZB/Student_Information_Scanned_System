@@ -19,7 +19,7 @@ class WarpResult:
     used_warp: bool
 
 
-# ─── Tiện ích ảnh ────────────────────────────────────────────────────────────
+# Tiện ích ảnh 
 
 def load_image(data: bytes) -> Image.Image:
     image = Image.open(io.BytesIO(data))
@@ -45,7 +45,7 @@ def cv_to_pil(image: np.ndarray) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
 
-# ─── Helpers cho visualization các bước OCR ──────────────────────────────────
+# Helpers cho visualization các bước OCR
 
 def img_to_data_url(image: np.ndarray, max_dim: int = 1000) -> str:
     """Mã hoá ảnh CV (BGR hoặc grayscale) → PNG data URL, có thu nhỏ nếu lớn."""
@@ -107,7 +107,7 @@ def draw_ocr_blocks_on_image(image: np.ndarray, blocks: List[Dict[str, Any]]) ->
     return out
 
 
-# ─── Warp perspective ────────────────────────────────────────────────────────
+# Warp perspective
 
 def order_points(points: np.ndarray) -> np.ndarray:
     rect = np.zeros((4, 2), dtype="float32")
@@ -1098,7 +1098,6 @@ def extract_cccd_info(
     """
     text = fix_ocr_text(raw_text)
 
-    # ─── Số CCCD: ưu tiên 12 chữ số (CCCD gắn chip) trước 9 chữ số (CMND cũ) ──
     cccd_number = None
     cands = _CCCD_NUMBER_RE.findall(text)
     if cands:
@@ -1106,7 +1105,6 @@ def extract_cccd_info(
         nine = [c for c in cands if len(c) == 9]
         cccd_number = (twelve or nine)[0]
 
-    # ─── Họ và tên: uàu tin label, fallback spatial scan ──
     full_name = None
     raw_name = _line_after_label(text, r"Họ\s+và\s+tên|Họ\s+tên|Full\s*name")
     if raw_name:
@@ -1138,7 +1136,6 @@ def extract_cccd_info(
         if full_name and full_name.isupper():
             full_name = _title_case_vn(full_name)
 
-    # ─── Ngày sinh ──
     birth_raw = _line_after_label(
         text, r"Ngày[,\s]*tháng[,\s]*năm\s+sinh|Ngày\s+sinh|Date\s+of\s+birth|DOB"
     )
@@ -1153,7 +1150,6 @@ def extract_cccd_info(
         if all_dates:
             birth_date = _normalize_date(all_dates[0])
 
-    # ─── Giới tính ──
     sex_raw = _line_after_label(text, r"Giới\s+tính|Sex")
     sex = None
     if sex_raw:
@@ -1162,7 +1158,6 @@ def extract_cccd_info(
         elif re.search(r"\bNữ\b|\bFemale\b|\bF\b", sex_raw, re.IGNORECASE):
             sex = "Nữ"
 
-    # ─── Quốc tịch ──
     nationality_raw = _line_after_label(text, r"Quốc\s+tịch|Nationality")
     nationality = None
     if nationality_raw:
@@ -1174,18 +1169,15 @@ def extract_cccd_info(
         if not nationality and re.search(r"Việt\s+Nam|Vietnam", text, re.IGNORECASE):
             nationality = "Việt Nam"
 
-    # ─── Quê quán ──
     hometown = _line_after_label(
         text, r"Quê\s+quán|Place\s+of\s+origin|Nguyên\s+quán", multiline=True
     )
 
-    # ─── Nơi thường trú ──
     residence = _line_after_label(
         text, r"Nơi\s+thường\s+trú|Place\s+of\s+residence|Thường\s+trú",
         multiline=True,
     )
 
-    # ─── Có giá trị đến ──
     expiry_raw = _line_after_label(
         text, r"Có\s+giá\s+trị\s+đến|Date\s+of\s+expiry|Expiry"
     )
@@ -1203,19 +1195,15 @@ def extract_cccd_info(
             if others:
                 expiry = others[-1]
 
-    # Họ tên: giữ ALL CAPS theo đặc tả output JSON
     ho_va_ten = full_name.upper() if full_name else None
 
-    # Địa chỉ: ưu tiên Nơi thường trú, fallback Quê quán
     dia_chi = residence or hometown
 
     return {
-        # ─ Schema chính theo đặc tả nghiệp vụ (4 trường tiếng Việt) ─
         "ho_va_ten": ho_va_ten,
         "so_cccd": cccd_number,
         "ngay_sinh": birth_date,
         "dia_chi": dia_chi,
-        # ─ Các trường phụ (giữ để matching + lịch sử) ─
         "sex": sex,
         "nationality": nationality,
         "hometown": hometown,

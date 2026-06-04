@@ -1,11 +1,18 @@
 """Router xử lý đăng ký / đăng nhập / đăng xuất."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session as DBSession
+
+logger = logging.getLogger(__name__)
 
 from ..auth import (
     get_current_user,
+    is_hust_email,
+    login_hust_user,
     login_user,
     logout_user,
     register_local,
@@ -18,11 +25,13 @@ from ..models import User
 from ..schemas import (
     ForgotPasswordPayload,
     LoginPayload,
+    MicrosoftLoginPayload,
     RegisterLocalPayload,
     RequestLocalOtpPayload,
     ResetPasswordPayload,
 )
 from ..services.email_sender import send_otp_email
+from ..services.hust_sso import check_login
 from ..services.otp_service import OTP_TTL_MINUTES, create_otp, verify_otp
 
 router = APIRouter(tags=["auth"])
@@ -112,6 +121,43 @@ def reset_password(payload: ResetPasswordPayload, db: DBSession = Depends(get_db
 @router.post("/login")
 def login(payload: LoginPayload, response: Response, db: DBSession = Depends(get_db)):
     return login_user(payload.identifier, payload.password, response, db)
+
+
+@router.post("/login/microsoft")
+async def login_microsoft(
+    payload: MicrosoftLoginPayload, response: Response, db: DBSession = Depends(get_db)
+):
+    """Đăng nhập bằng tài khoản trường: xác thực email+mật khẩu với SSO Microsoft của HUST.
+
+    Mật khẩu được kiểm tra trực tiếp trên sso.hust.edu.vn (Playwright headless),
+    không lưu lại. Đăng nhập đúng → tạo/lấy tài khoản theo email rồi set cookie.
+    """
+    email = payload.email.strip().lower()
+    if not is_hust_email(email):
+        raise HTTPException(
+            status_code=422, detail="Vui lòng dùng email sinh viên @sis.hust.edu.vn."
+        )
+    if not payload.password:
+        raise HTTPException(status_code=422, detail="Vui lòng nhập mật khẩu.")
+
+    # check_login dùng Playwright (đồng bộ) → chạy ở threadpool để không chặn event loop.
+    try:
+        ok = await run_in_threadpool(check_login, email, payload.password)
+    except Exception:
+        # Ghi traceback đầy đủ ra log server để biết nguyên nhân thật (Playwright,
+        # chromium chưa cài, timeout SSO, selector đổi…). FE chỉ thấy 502 chung.
+        logger.exception("check_login (HUST SSO) thất bại cho email=%s", email)
+        raise HTTPException(
+            status_code=502,
+            detail="Không kết nối được tới hệ thống đăng nhập của trường. Vui lòng thử lại.",
+        )
+
+    if not ok:
+        raise HTTPException(
+            status_code=401, detail="Sai email hoặc mật khẩu tài khoản trường."
+        )
+
+    return login_hust_user(email, response, db)
 
 
 @router.post("/logout")

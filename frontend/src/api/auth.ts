@@ -35,6 +35,15 @@ export async function login(identifier: string, password: string): Promise<AuthU
   return res.data;
 }
 
+/** Đăng nhập bằng tài khoản trường (Microsoft/HUST SSO) — xác thực qua sso.hust.edu.vn. */
+export async function loginMicrosoft(
+  email: string,
+  password: string
+): Promise<AuthUser> {
+  const res = await api.post("/login/microsoft", { email, password });
+  return res.data;
+}
+
 export async function logout(): Promise<void> {
   await api.post("/logout");
 }

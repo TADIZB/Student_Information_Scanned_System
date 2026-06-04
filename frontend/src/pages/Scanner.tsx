@@ -64,7 +64,6 @@ const renderQrData = (raw: string) => {
   );
 };
 
-// Màu hiển thị theo trạng thái từng bước OCR
 const STEP_COLOR: Record<string, string> = {
   pending: "#9ca3af",
   success: "#22c55e",
@@ -90,7 +89,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
       const all = await navigator.mediaDevices.enumerateDevices();
       const cams = all.filter((d) => d.kind === "videoinput");
       setCameras(cams);
-      // Nếu chưa chọn cái nào (hoặc deviceId không còn tồn tại), chọn cái đầu
       setDeviceId((cur) =>
         cur && cams.some((c) => c.deviceId === cur)
           ? cur
@@ -109,22 +107,17 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // Engine OCR: Tesseract (cục bộ) hoặc Gemini (AI). Chỉ dùng ở chế độ OCR.
   const [ocrEngine, setOcrEngine] = useState<OcrEngine>("tesseract");
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
-  // Ảnh đang phân tích (snapshot từ cam hoặc file upload) — hiển thị thay cho cam khi busy
   const [analyzingPreview, setAnalyzingPreview] = useState<string | null>(null);
 
-  // ── MSSV nhập tay (chỉ QR) ────────────────────────────────────────────────
   const [manualMssv, setManualMssv] = useState("");
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
   const [lookupError, setLookupError] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
 
-  // ── Steps animation (chỉ OCR) ─────────────────────────────────────────────
   const [visibleSteps, setVisibleSteps] = useState<(ScanStep & { visible: boolean })[]>([]);
 
-  // ── Lịch sử ───────────────────────────────────────────────────────────────
   const [records, setRecords] = useState<ScanRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [selected, setSelected] = useState<ScanDetail | null>(null);
@@ -168,7 +161,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     return `${API_BASE}${imageUrl}`;
   };
 
-  // ── Animate OCR steps ─────────────────────────────────────────────────────
+  // Animate OCR steps 
   const animateSteps = (steps: ScanStep[]) => {
     // Khởi tạo tất cả là pending (giữ image_url + description sẵn để fade-in)
     const init = steps.map((s) => ({ ...s, status: "pending" as const, visible: false }));
@@ -184,7 +177,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     });
   };
 
-  // ── Xử lý blob (dùng chung cho cả QR lẫn OCR) ───────────────────────────
+  // Xử lý blob (dùng chung cho cả QR lẫn OCR) 
   const handleBlob = useCallback(
     async (blob: Blob, force = false) => {
       if (!force && busy) return;
@@ -207,7 +200,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
         setLastResult(result);
 
-        // Chỉ hiển thị các bước cho engine Tesseract. Engine AI (Gemini) chỉ ra kết quả.
         if (scanMode === "ocr" && ocrEngine === "tesseract" && result.steps?.length) {
           animateSteps(result.steps);
         }
@@ -235,7 +227,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     [busy, scanMode, ocrEngine, loadHistory, onScanSuccess],
   );
 
-  // ── Detect QR client-side bằng jsQR (chạy ngay trên frame webcam) ────────
+  // ── Detect QR client-side bằng jsQR (chạy ngay trên frame webcam)
   // Trả về true nếu frame có QR — chỉ khi đó mới gửi BE để parse + lưu.
   const detectQrInDataUrl = useCallback((dataUrl: string): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -267,7 +259,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     });
   }, []);
 
-  // ── Auto-scan (QR luôn bật khi mount) ────────────────────────────────────
+  // Auto-scan (QR luôn bật khi mount) 
   const startAutoScan = useCallback(() => {
     if (intervalRef.current) return;
     intervalRef.current = window.setInterval(async () => {
@@ -292,7 +284,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     return () => stopAutoScan();
   }, [scanMode, startAutoScan, stopAutoScan]);
 
-  // ── Upload file ───────────────────────────────────────────────────────────
+  // Upload file 
   const handleFileUpload = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -304,7 +296,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     [handleBlob, scanMode, stopAutoScan],
   );
 
-  // ── OCR: chụp thủ công ────────────────────────────────────────────────────
+  //OCR: chụp thủ công 
   const handleCapture = useCallback(() => {
     const imageSrc = webcamRef.current?.getScreenshot();
     if (!imageSrc) return;
@@ -327,14 +319,13 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     }
   };
 
-  // Trạng thái học từ HUST: 1=Đang học, 0=Nghỉ học
   const renderStatus = (s?: number | null): React.ReactNode => {
     if (s === 1) return <strong style={{ color: "#16a34a" }}>Đang học</strong>;
     if (s === 0) return <strong style={{ color: "#dc2626" }}>Nghỉ học</strong>;
     return "—";
   };
 
-  // ── Render thông tin sinh viên / CCCD ─────────────────────────────────────
+  // Render thông tin sinh viên / CCCD 
   const renderStudentInfo = (info: StudentInfo) => {
     // Có dữ liệu CCCD bóc được? (chỉ ở chế độ OCR)
     const hasCccd = !!(info.so_cccd || info.dia_chi || info.ho_va_ten);
@@ -350,7 +341,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         ["MSSV", renderMssvStyled(info.student_id)],
       ];
     } else {
-      // Thẻ sinh viên (QR): 5 ô theo yêu cầu
       rows = [
         ["Họ tên", info.full_name || "—"],
         ["Ngày sinh", info.birth_date || "—"],
@@ -374,7 +364,6 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     );
   };
 
-  // ── Render kết quả so khớp khuôn mặt (Gemini) ─────────────────────────────
   const FACE_MATCH_META: Record<FaceMatch["ket_qua"], { label: string; color: string; icon: string }> = {
     khop: { label: "Cùng một người", color: "#16a34a", icon: "✓" },
     khong_khop: { label: "Khác người", color: "#dc2626", icon: "✗" },
@@ -544,7 +533,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
 
       {error && <div className="banner error">{error}</div>}
 
-      {/* ── Điều khiển theo mode ───────────────────────────────────────────── */}
+      {/* ── Điều khiển theo mode  */}
       <div className="scanner-controls">
         {scanMode === "ocr" && (
           <button className="secondary" disabled={busy} onClick={handleCapture}>
@@ -557,7 +546,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         </button>
       </div>
 
-      {/* ── Nhập MSSV thủ công (chỉ QR) ───────────────────────────────────── */}
+      {/* ── Nhập MSSV thủ công */}
       {scanMode === "qr" && (
         <div className="manual-lookup">
           <p className="manual-lookup-label">Tra cứu theo MSSV</p>
@@ -598,7 +587,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         </div>
       )}
 
-      {/* ── Steps xử lý OCR ────────────────────────────────────────────────── */}
+      {/*Steps xử lý OCR*/}
       {scanMode === "ocr" && visibleSteps.length > 0 && (
         <div className="ocr-steps">
           <p className="ocr-steps-title">Quá trình xử lý từng bước</p>
@@ -628,7 +617,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         </div>
       )}
 
-      {/* ── Kết quả quét gần nhất ──────────────────────────────────────────── */}
+      {/*Kết quả quét gần nhất*/}
       {lastResult && (
         <div className="scan-result-card">
           <div className="scan-result-header">
@@ -688,7 +677,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         </div>
       )}
 
-      {/* ── Lịch sử quét ───────────────────────────────────────────────────── */}
+      {/*Lịch sử quét*/}
       {!isLoggedIn && (
         <p className="hint" style={{ marginTop: 24 }}>
           <button className="ghost" style={{ padding: "4px 12px", fontSize: 13, marginRight: 6 }} onClick={onLoginClick}>
@@ -739,7 +728,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         )}
       </div>
 
-      {/* ── Modal chi tiết ─────────────────────────────────────────────────── */}
+      {/*Modal chi tiết*/}
       {(selected || loadingDetail) && (
         <div className="modal-overlay" onClick={() => setSelected(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>

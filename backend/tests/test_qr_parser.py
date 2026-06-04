@@ -7,7 +7,7 @@ from pathlib import Path
 # Cho phép import `app.*` khi chạy pytest từ thư mục backend/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.routers.scan import _parse_qr_mssv  # noqa: E402
+from app.routers.scan import _parse_qr_mssv  
 
 
 def test_parse_qr_url_hust():
@@ -15,7 +15,7 @@ def test_parse_qr_url_hust():
     qr = "https://ctsv.hust.edu.vn/#/card/20210001/NGUYEN_VAN_A/abcdef"
     result = _parse_qr_mssv(qr)
     assert result["student_id"] == "20210001"
-    assert result["full_name"] == "Nguyen Van A"   # title-case do UPPERCASE đầu vào
+    assert result["full_name"] == "Nguyen Van A"  
     assert result["school"] == "Đại học Bách khoa Hà Nội"
 
 

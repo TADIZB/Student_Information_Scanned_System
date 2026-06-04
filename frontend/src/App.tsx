@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getMe, logout } from "./api";
 import type { ScanResult } from "./api";
 import Login from "./pages/Login";
+import MicrosoftLogin from "./pages/MicrosoftLogin";
 import Scanner from "./pages/Scanner";
 import Homepage from "./pages/Homepage";
 import Profile from "./pages/Profile";
@@ -17,6 +18,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("qr");
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [showMsLogin, setShowMsLogin] = useState(false);
+  const [msPrefillEmail, setMsPrefillEmail] = useState<string | undefined>(undefined);
 
   const displayName = (u: { username: string | null; full_name: string | null; email: string | null }) =>
     u.username || u.full_name || u.email;
@@ -32,6 +35,7 @@ export default function App() {
     const data = await getMe();
     setUsername(displayName(data));
     setShowAuth(false);
+    setShowMsLogin(false);
     setView("app");
   };
 
@@ -54,12 +58,27 @@ export default function App() {
   }
 
 
+  if (showMsLogin) {
+    return (
+      <MicrosoftLogin
+        onLogin={handleLogin}
+        initialEmail={msPrefillEmail}
+        onBack={() => { setShowMsLogin(false); setShowAuth(true); }}
+      />
+    );
+  }
+
   if (showAuth) {
     return (
       <Login
         onLogin={handleLogin}
         initialMode={authMode}
         onBack={() => setShowAuth(false)}
+        onMicrosoftLogin={(prefill) => {
+          setMsPrefillEmail(prefill);
+          setShowAuth(false);
+          setShowMsLogin(true);
+        }}
       />
     );
   }
