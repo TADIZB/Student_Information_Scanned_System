@@ -30,7 +30,11 @@ from ..pipeline import (
 )
 from ..services.gemini_ocr import compare_faces, extract_cccd_with_gemini
 from ..services.hust_image import fetch_student_avatar
-from ..services.student_matching import _match_student_by_cccd, _student_to_dict
+from ..services.student_matching import (
+    _match_student_by_cccd,
+    _student_to_dict,
+    derive_contact_email,
+)
 
 router = APIRouter(tags=["scan"])
 
@@ -143,6 +147,11 @@ async def process_scan(
 
             parsed = _parse_qr_mssv(qr_data)
             mssv = parsed.get("student_id")
+
+            # Email liên lạc: QR HUST không kèm email → suy ra từ họ tên + MSSV
+            # theo quy ước trường (Duc.TA225814@sis.hust.edu.vn).
+            if not parsed.get("email"):
+                parsed["email"] = derive_contact_email(parsed.get("full_name"), mssv)
 
             student = db.query(Student).filter(Student.student_id == mssv).first() if mssv else None
 
@@ -525,7 +534,7 @@ async def process_scan(
                 **cccd,
                 "student_id": student.student_id,
                 "school": student.school,
-                "email": student.email,
+                "email": student.email or derive_contact_email(student.full_name, student.student_id),
                 "avatar_url": (
                     f"/images/avatar/student/{student.id}" if student.avatar_data else None
                 ),

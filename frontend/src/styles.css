@@ -1974,61 +1974,71 @@ button.ghost.small {
   color: var(--ink);
 }
 
-/* ─ Thẻ gốc HUST: iframe (400×608) + đọc bằng Gemini ─ */
-.card-embed-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.card-embed-head .raw-label {
-  margin: 0;
-}
-
-.card-embed-hint {
-  margin: 0 0 10px;
-  font-size: 12px;
+/* ─ Gửi tin nhắn qua Teams ─ */
+.teams-send-to {
+  margin: 0 0 8px;
+  font-size: 13px;
   color: var(--muted);
-  line-height: 1.5;
 }
 
-.card-embed-btn {
-  flex: none;
-  padding: 7px 14px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
+.teams-send-to strong {
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.teams-msg {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid rgba(18, 20, 31, 0.16);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: #fff;
+}
+
+.teams-msg:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.teams-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.teams-btn {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #4b53bc;
   color: #fff;
-  border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background 120ms ease, opacity 120ms ease;
 }
 
-.card-embed-btn:hover {
+.teams-btn:hover {
+  background: #3a41a0;
+}
+
+.teams-btn.email-btn {
+  background: var(--accent);
+}
+
+.teams-btn.email-btn:hover {
   background: var(--accent-dark);
 }
 
-.card-embed-btn:disabled {
-  opacity: 0.6;
+.teams-btn:disabled {
+  opacity: 0.5;
   cursor: default;
-}
-
-.card-embed-frame {
-  display: flex;
-  justify-content: center;
-  overflow: auto;
-}
-
-.card-embed-frame iframe {
-  width: 400px;
-  height: 608px;
-  border: 1px solid rgba(18, 20, 31, 0.12);
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10);
 }
 
 /* Nút export */

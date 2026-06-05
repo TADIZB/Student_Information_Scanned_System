@@ -71,6 +71,10 @@ const STEP_COLOR: Record<string, string> = {
   fail: "#ef4444",
 };
 
+// Nội dung tin nhắn mặc định khi gửi cho sinh viên (Teams/email, người dùng có thể sửa).
+const DEFAULT_MSG =
+  "Chào bạn, đây là thông báo từ phòng CTSV liên quan đến thẻ sinh viên của bạn.";
+
 export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginClick }: Props) {
   const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +115,9 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [analyzingPreview, setAnalyzingPreview] = useState<string | null>(null);
 
+  // Nội dung soạn để gửi cho sinh viên vừa quét (dùng chung cho Teams & email).
+  const [msgContent, setMsgContent] = useState(DEFAULT_MSG);
+
   const [manualMssv, setManualMssv] = useState("");
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
   const [lookupError, setLookupError] = useState("");
@@ -146,6 +153,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     setManualMssv("");
     setAnalyzingPreview(null);
     setQrOverlayUrl(null);
+    setMsgContent(DEFAULT_MSG);
   }, [scanMode]);
 
   const openDetail = async (id: string) => {
@@ -159,6 +167,69 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
     if (!imageUrl) return null;
     if (imageUrl.startsWith("data:")) return imageUrl;
     return `${API_BASE}${imageUrl}`;
+  };
+
+  // Mở Teams (app/web) tới khung chat với sinh viên, điền sẵn nội dung.
+  // Teams cần email/UPN hợp lệ (không nhận MSSV trơn) nên đòi student_info.email.
+  const sendTeamsChat = (info: StudentInfo) => {
+    if (!info.email || !msgContent.trim()) return;
+    const message = encodeURIComponent(`${msgContent.trim()} (MSSV ${info.student_id ?? ""})`.trim());
+    const users = encodeURIComponent(info.email);
+    window.open(
+      `https://teams.microsoft.com/l/chat/0/0?users=${users}&message=${message}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+
+  // Mở trình email mặc định (mailto) với người nhận + tiêu đề + nội dung soạn sẵn.
+  // Dùng thẻ <a> ẩn thay vì window.open để tránh để lại tab trắng trên Chrome.
+  const sendEmail = (info: StudentInfo) => {
+    if (!info.email || !msgContent.trim()) return;
+    const subject = encodeURIComponent(`[HUST] Thông báo về thẻ sinh viên ${info.student_id ?? ""}`.trim());
+    const greet = info.full_name || info.ho_va_ten || `bạn sinh viên có mã số ${info.student_id ?? ""}`;
+    const body = encodeURIComponent(`Chào ${greet},\n\n${msgContent.trim()}\n\nTrân trọng.`);
+    const a = document.createElement("a");
+    a.href = `mailto:${info.email}?subject=${subject}&body=${body}`;
+    a.click();
+  };
+
+  // Khối soạn + 2 nút gửi (Teams/email). Chỉ render khi sinh viên có email.
+  const renderMessageActions = (info: StudentInfo) => {
+    if (!info.email) return null;
+    return (
+      <div className="raw-section teams-send">
+        <p className="raw-label">Gửi tin nhắn cho sinh viên</p>
+        <p className="teams-send-to">
+          Người nhận: <strong>{info.email}</strong>
+        </p>
+        <textarea
+          className="teams-msg"
+          value={msgContent}
+          onChange={(e) => setMsgContent(e.target.value)}
+          rows={3}
+          placeholder="Nội dung tin nhắn gửi tới sinh viên..."
+        />
+        <div className="teams-actions">
+          <button
+            type="button"
+            className="teams-btn"
+            disabled={!msgContent.trim()}
+            onClick={() => sendTeamsChat(info)}
+          >
+            💬 Gửi qua Teams
+          </button>
+          <button
+            type="button"
+            className="teams-btn email-btn"
+            disabled={!msgContent.trim()}
+            onClick={() => sendEmail(info)}
+          >
+            ✉️ Gửi email
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Animate OCR steps 
@@ -345,6 +416,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         ["Họ tên", info.full_name || "—"],
         ["Ngày sinh", info.birth_date || "—"],
         ["MSSV", renderMssvStyled(info.student_id)],
+        ["Email liên lạc", info.email || "—"],
         ["Trường, Viện", info.school || "—"],
         ["Trạng thái", renderStatus(info.study_status)],
       ];
@@ -582,6 +654,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
                 <span className="badge qr">TRA CỨU</span>
               </div>
               {renderStudentInfo(lookupResult)}
+              {renderMessageActions(lookupResult)}
             </div>
           )}
         </div>
@@ -641,30 +714,14 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
             )}
             {lastResult.student_info && renderStudentInfo(lastResult.student_info)}
           </div>
+          {(lastResult.scan_type === "qr" || lastResult.match_result === 1) &&
+            lastResult.student_info &&
+            renderMessageActions(lastResult.student_info)}
           {lastResult.face_match && renderFaceMatch(lastResult.face_match)}
           {lastResult.qr_data && (
             <div className="raw-section">
               <p className="raw-label">QR Raw Data</p>
               {renderQrData(lastResult.qr_data)}
-            </div>
-          )}
-          {/* Thẻ gốc HUST: nhúng iframe để người dùng xem trực tiếp */}
-          {lastResult.scan_type === "qr" && extractUrl(lastResult.qr_data) && (
-            <div className="raw-section">
-              <div className="card-embed-head">
-                <p className="raw-label">Thẻ sinh viên gốc (HUST)</p>
-              </div>
-              <p className="card-embed-hint">
-                Đăng nhập ctsv trong khung dưới để xem thẻ sinh viên gốc.
-              </p>
-              <div className="card-embed-frame">
-                <iframe
-                  src={extractUrl(lastResult.qr_data)!.href}
-                  title="Thẻ sinh viên HUST"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
             </div>
           )}
           {lastResult.scan_type === "ocr" && lastResult.raw_text && (

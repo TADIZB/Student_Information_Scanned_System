@@ -15,6 +15,36 @@ def _strip_diacritics(s: str) -> str:
     return cleaned.replace("đ", "d").replace("Đ", "D")
 
 
+def derive_contact_email(full_name: str | None, student_id: str | None) -> str | None:
+    """Suy ra email liên lạc @sis.hust.edu.vn theo quy ước HUST.
+
+    Quy ước: ``<Tên>.<viết tắt họ+đệm><MSSV bỏ tiền tố '20'>@sis.hust.edu.vn``
+    Ví dụ: "Trương Anh Đức" + 20225814 → ``Duc.TA225814@sis.hust.edu.vn``.
+
+    LƯU Ý: MSSV HUST có thể 8 HOẶC 9 chữ số → KHÔNG cắt cứng "6 số cuối"
+    (sẽ sai với mã 9 số). Thay vào đó bỏ tiền tố thế kỷ "20" — chung cho mọi
+    MSSV HUST — nên cả 20225814 (→225814) lẫn mã 9 số (vd 202412345→2412345)
+    đều ra đúng phần số.
+    """
+    if not full_name or not student_id:
+        return None
+
+    # Phần số: chỉ giữ chữ số, bỏ tiền tố "20" (không phụ thuộc độ dài 8/9).
+    digits = "".join(ch for ch in student_id if ch.isdigit())
+    if len(digits) < 8:
+        return None
+    num = digits[2:] if digits.startswith("20") else digits
+
+    # Phần tên: tách từ (đã bỏ dấu). Cần ít nhất họ + tên.
+    parts = [p for p in _strip_diacritics(full_name).split() if p]
+    if len(parts) < 2:
+        return None
+    ten = parts[-1].capitalize()                          # tên gọi: "Duc"
+    initials = "".join(p[0] for p in parts[:-1]).upper()  # họ + đệm: "TA"
+
+    return f"{ten}.{initials}{num}@sis.hust.edu.vn"
+
+
 def _match_student(
     db: DBSession,
     mssv_candidates: list[str],
@@ -176,12 +206,14 @@ def _match_student_by_cccd(
 
 
 def _student_to_dict(s: Student, scan_id: str | None = None) -> dict:
+    # Email liên lạc: ưu tiên giá trị đã lưu, nếu trống thì suy ra từ tên + MSSV.
+    email = s.email or derive_contact_email(s.full_name, s.student_id)
     return {
         "full_name": s.full_name,
         "birth_date": s.birth_date,
         "school": s.school,
         "student_id": s.student_id,
-        "email": s.email,
+        "email": email,
         "study_status": s.study_status,
         "avatar_url": f"/images/avatar/student/{s.id}" if s.avatar_data else None,
     }
