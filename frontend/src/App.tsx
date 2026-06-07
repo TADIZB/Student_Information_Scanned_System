@@ -11,8 +11,14 @@ type Tab = "qr" | "ocr";
 type View = "home" | "app" | "profile";
 type AuthMode = "login" | "register";
 
+// Tài khoản trường (Microsoft/HUST) mới được dùng chức năng gửi thông báo Teams/Outlook.
+const HUST_EMAIL_DOMAIN = "@sis.hust.edu.vn";
+const isHustEmail = (email: string | null) =>
+  !!email && email.trim().toLowerCase().endsWith(HUST_EMAIL_DOMAIN);
+
 export default function App() {
   const [username, setUsername] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   const [view, setView] = useState<View>("home");
   const [tab, setTab] = useState<Tab>("qr");
@@ -26,14 +32,15 @@ export default function App() {
 
   useEffect(() => {
     getMe()
-      .then((data) => setUsername(displayName(data)))
-      .catch(() => setUsername(null))
+      .then((data) => { setUsername(displayName(data)); setUserEmail(data.email); })
+      .catch(() => { setUsername(null); setUserEmail(null); })
       .finally(() => setChecking(false));
   }, []);
 
   const handleLogin = async () => {
     const data = await getMe();
     setUsername(displayName(data));
+    setUserEmail(data.email);
     setShowAuth(false);
     setShowMsLogin(false);
     setView("app");
@@ -178,6 +185,7 @@ export default function App() {
           <Scanner
             scanMode="qr"
             isLoggedIn={!!username}
+            isHustAccount={isHustEmail(userEmail)}
             onScanSuccess={handleScanSuccess}
             onLoginClick={() => { setAuthMode("login"); setShowAuth(true); }}
           />
@@ -186,6 +194,7 @@ export default function App() {
           <Scanner
             scanMode="ocr"
             isLoggedIn={!!username}
+            isHustAccount={isHustEmail(userEmail)}
             onScanSuccess={handleScanSuccess}
             onLoginClick={() => { setAuthMode("login"); setShowAuth(true); }}
           />

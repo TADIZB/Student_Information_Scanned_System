@@ -21,6 +21,8 @@ interface Props {
   onScanSuccess: (result: ScanResult) => void;
   scanMode: "qr" | "ocr";
   isLoggedIn: boolean;
+  // Chỉ tài khoản trường (@sis.hust.edu.vn) mới được gửi thông báo qua Teams/Outlook.
+  isHustAccount?: boolean;
   onLoginClick?: () => void;
 }
 
@@ -75,7 +77,7 @@ const STEP_COLOR: Record<string, string> = {
 const DEFAULT_MSG =
   "Chào bạn, đây là thông báo từ phòng CTSV liên quan đến thẻ sinh viên của bạn.";
 
-export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginClick }: Props) {
+export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAccount = false, onLoginClick }: Props) {
   const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<number | null>(null);
@@ -172,7 +174,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
   // Mở Teams (app/web) tới khung chat với sinh viên, điền sẵn nội dung.
   // Teams cần email/UPN hợp lệ (không nhận MSSV trơn) nên đòi student_info.email.
   const sendTeamsChat = (info: StudentInfo) => {
-    if (!info.email || !msgContent.trim()) return;
+    if (!isHustAccount || !info.email || !msgContent.trim()) return;
     const message = encodeURIComponent(`${msgContent.trim()} (MSSV ${info.student_id ?? ""})`.trim());
     const users = encodeURIComponent(info.email);
     window.open(
@@ -185,7 +187,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
   // Mở trình email mặc định (mailto) với người nhận + tiêu đề + nội dung soạn sẵn.
   // Dùng thẻ <a> ẩn thay vì window.open để tránh để lại tab trắng trên Chrome.
   const sendEmail = (info: StudentInfo) => {
-    if (!info.email || !msgContent.trim()) return;
+    if (!isHustAccount || !info.email || !msgContent.trim()) return;
     const subject = encodeURIComponent(`[HUST] Thông báo về thẻ sinh viên ${info.student_id ?? ""}`.trim());
     const greet = info.full_name || info.ho_va_ten || `bạn sinh viên có mã số ${info.student_id ?? ""}`;
     const body = encodeURIComponent(`Chào ${greet},\n\n${msgContent.trim()}\n\nTrân trọng.`);
@@ -195,6 +197,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
   };
 
   // Khối soạn + 2 nút gửi (Teams/email). Chỉ render khi sinh viên có email.
+  // Chỉ tài khoản trường (@sis.hust.edu.vn) mới được gửi — tài khoản thường bị chặn.
   const renderMessageActions = (info: StudentInfo) => {
     if (!info.email) return null;
     return (
@@ -203,18 +206,26 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
         <p className="teams-send-to">
           Người nhận: <strong>{info.email}</strong>
         </p>
+        {!isHustAccount && (
+          <p className="teams-locked-note">
+            🔒 Cần đăng nhập bằng <strong>tài khoản trường (@sis.hust.edu.vn)</strong> để
+            gửi thông báo qua Teams/Outlook.
+          </p>
+        )}
         <textarea
           className="teams-msg"
           value={msgContent}
           onChange={(e) => setMsgContent(e.target.value)}
           rows={3}
           placeholder="Nội dung tin nhắn gửi tới sinh viên..."
+          disabled={!isHustAccount}
         />
         <div className="teams-actions">
           <button
             type="button"
             className="teams-btn"
-            disabled={!msgContent.trim()}
+            disabled={!isHustAccount || !msgContent.trim()}
+            title={!isHustAccount ? "Chỉ dùng được với tài khoản trường (@sis.hust.edu.vn)" : undefined}
             onClick={() => sendTeamsChat(info)}
           >
             💬 Gửi qua Teams
@@ -222,7 +233,8 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, onLoginCl
           <button
             type="button"
             className="teams-btn email-btn"
-            disabled={!msgContent.trim()}
+            disabled={!isHustAccount || !msgContent.trim()}
+            title={!isHustAccount ? "Chỉ dùng được với tài khoản trường (@sis.hust.edu.vn)" : undefined}
             onClick={() => sendEmail(info)}
           >
             ✉️ Gửi email
