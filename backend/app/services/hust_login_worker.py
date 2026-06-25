@@ -15,20 +15,23 @@ Giao tiếp:
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 
-# microsoft_login.py nằm ở thư mục gốc backend/ (ngoài package app).
+# Ensure the backend root is importable when this file is executed as a script.
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 def main() -> int:
     raw = sys.stdin.read() or "{}"
     try:
         payload = json.loads(raw)
-        from microsoft_login import check_login  # import trễ: cần playwright
+        from app.services.microsoft_login import check_login
 
         ok = bool(check_login(payload["email"], payload["password"]))
         sys.stdout.write(json.dumps({"ok": ok}))

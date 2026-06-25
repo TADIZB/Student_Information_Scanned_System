@@ -26,6 +26,12 @@ interface Props {
   onLoginClick?: () => void;
 }
 
+interface QrAnalysis {
+  data: string | null;
+  cropBlob?: Blob;
+  cropDataUrl?: string;
+}
+
 const renderMssvStyled = (mssv: string | null) => {
   if (!mssv) return <span>—</span>;
   const year = mssv.slice(0, 4);
@@ -66,6 +72,14 @@ const renderQrData = (raw: string) => {
   );
 };
 
+const blobToDataUrl = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+
 const STEP_COLOR: Record<string, string> = {
   pending: "#9ca3af",
   success: "#22c55e",
@@ -81,6 +95,10 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
   const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<number | null>(null);
+  const busyRef = useRef(false);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const stepsRef = useRef<HTMLDivElement>(null);
+  const zxingReaderRef = useRef<any>(null);
 
   // Link phát hiện từ QR mới nhất, hiển thị overlay trên camera
   const [qrOverlayUrl, setQrOverlayUrl] = useState<string | null>(null);
@@ -131,9 +149,14 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [selected, setSelected] = useState<ScanDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showDetailImage, setShowDetailImage] = useState(false);
 
   const loadHistory = useCallback(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn) {
+      setLoadingHistory(false);
+      setRecords([]);
+      return;
+    }
     setLoadingHistory(true);
     getScanHistory()
       .then((r) => setRecords(r.filter((x) =>
@@ -160,6 +183,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
 
   const openDetail = async (id: string) => {
     setLoadingDetail(true);
+    setShowDetailImage(false);
     try { setSelected(await getScanDetail(id)); }
     catch { /* ignore */ }
     finally { setLoadingDetail(false); }
@@ -260,31 +284,147 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
     });
   };
 
+  // Decode QR client-side and crop/zoom around the detected QR region.
+  const analyzeQrInDataUrl = useCallback((dataUrl: string): Promise<QrAnalysis> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = async () => {
+        const MAX_W = 1200;
+        const scale = img.width > MAX_W ? MAX_W / img.width : 1;
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return resolve({ data: null });
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "attemptBoth",
+          });
+          if (!code?.data) {
+            try {
+              if (!zxingReaderRef.current) {
+                const { BrowserQRCodeReader } = await import("@zxing/browser");
+                zxingReaderRef.current = new BrowserQRCodeReader();
+              }
+              const result = await zxingReaderRef.current.decodeFromCanvas(canvas);
+              const text = result?.getText?.() || String(result || "");
+              return resolve({ data: text || null });
+            } catch {
+              return resolve({ data: null });
+            }
+          }
+
+          const points = [
+            code.location.topLeftCorner,
+            code.location.topRightCorner,
+            code.location.bottomRightCorner,
+            code.location.bottomLeftCorner,
+          ];
+          const xs = points.map((p) => p.x / scale);
+          const ys = points.map((p) => p.y / scale);
+          const minX = Math.max(0, Math.min(...xs));
+          const minY = Math.max(0, Math.min(...ys));
+          const maxX = Math.min(img.width, Math.max(...xs));
+          const maxY = Math.min(img.height, Math.max(...ys));
+          const qrW = Math.max(1, maxX - minX);
+          const qrH = Math.max(1, maxY - minY);
+          const pad = Math.max(qrW, qrH) * 0.65;
+
+          const cropX = Math.max(0, Math.floor(minX - pad));
+          const cropY = Math.max(0, Math.floor(minY - pad));
+          const cropW = Math.min(img.width - cropX, Math.ceil(qrW + pad * 2));
+          const cropH = Math.min(img.height - cropY, Math.ceil(qrH + pad * 2));
+          const targetLongest = 1000;
+          const cropScale = Math.max(1, targetLongest / Math.max(cropW, cropH));
+
+          const cropCanvas = document.createElement("canvas");
+          cropCanvas.width = Math.round(cropW * cropScale);
+          cropCanvas.height = Math.round(cropH * cropScale);
+          const cropCtx = cropCanvas.getContext("2d");
+          if (!cropCtx) return resolve({ data: code.data });
+          cropCtx.imageSmoothingEnabled = true;
+          cropCtx.imageSmoothingQuality = "high";
+          cropCtx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
+
+          cropCanvas.toBlob(
+            (cropBlob) => {
+              resolve({
+                data: code.data,
+                cropBlob: cropBlob || undefined,
+                cropDataUrl: cropCanvas.toDataURL("image/jpeg", 0.92),
+              });
+            },
+            "image/jpeg",
+            0.92,
+          );
+        } catch {
+          resolve({ data: null });
+        }
+      };
+      img.onerror = () => resolve({ data: null });
+      img.src = dataUrl;
+    });
+  }, []);
+
   // Xử lý blob (dùng chung cho cả QR lẫn OCR) 
   const handleBlob = useCallback(
-    async (blob: Blob, force = false) => {
-      if (!force && busy) return;
+    async (blob: Blob, force = false, qrDataClient?: string | null) => {
+      if (!force && busyRef.current) return;
+      busyRef.current = true;
       setBusy(true);
       setError("");
       setVisibleSteps([]);
+      if (scanMode === "qr") setQrOverlayUrl(null);
       // OCR: lưu snapshot để hiển thị thay cho cam trong lúc phân tích
       let previewObjectUrl: string | null = null;
-      if (scanMode === "ocr") {
+      if (scanMode === "ocr" || (scanMode === "qr" && force)) {
         try {
           previewObjectUrl = URL.createObjectURL(blob);
           setAnalyzingPreview(previewObjectUrl);
         } catch { /* ignore */ }
       }
       try {
-        const result = await processScan(blob, scanMode, scanMode === "ocr" ? ocrEngine : "tesseract");
+        let qrText = qrDataClient || null;
+        let scanBlob = blob;
+        if (scanMode === "qr" && !qrText) {
+          const qrAnalysis = await analyzeQrInDataUrl(await blobToDataUrl(blob));
+          qrText = qrAnalysis.data;
+          if (qrAnalysis.cropBlob) {
+            scanBlob = qrAnalysis.cropBlob;
+          }
+          if (qrAnalysis.cropDataUrl) {
+            setAnalyzingPreview(qrAnalysis.cropDataUrl);
+          }
+          if (!qrText && !force) {
+            setError("Khong doc duoc ma QR trong anh. Vui long chup hoac tai anh ro hon.");
+            return;
+          }
+        }
+
+        const result = await processScan(
+          scanBlob,
+          scanMode,
+          scanMode === "ocr" ? ocrEngine : "tesseract",
+          qrText,
+        );
 
         // QR auto-scan: frame không có QR → bỏ qua, không cập nhật UI
-        if (scanMode === "qr" && !result.qr_data) return;
+        if (scanMode === "qr" && !result.qr_data) {
+          setError("Backend da nhan anh nhung khong tra ve du lieu QR.");
+          return;
+        }
 
         setLastResult(result);
 
         if (scanMode === "ocr" && ocrEngine === "tesseract" && result.steps?.length) {
           animateSteps(result.steps);
+          setTimeout(() => stepsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+        } else {
+          setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
         }
 
         const recognized = scanMode === "qr" ? !!result.qr_data : result.match_result === 1;
@@ -301,61 +441,31 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
         const detail = err?.response?.data?.detail;
         setError(detail || "Quét thất bại. Vui lòng thử lại hoặc điều chỉnh góc chụp.");
       } finally {
+        busyRef.current = false;
         setBusy(false);
         setAnalyzingPreview(null);
         if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busy, scanMode, ocrEngine, loadHistory, onScanSuccess],
+    [scanMode, ocrEngine, loadHistory, onScanSuccess, analyzeQrInDataUrl],
   );
-
-  // ── Detect QR client-side bằng jsQR (chạy ngay trên frame webcam)
-  // Trả về true nếu frame có QR — chỉ khi đó mới gửi BE để parse + lưu.
-  const detectQrInDataUrl = useCallback((dataUrl: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        // Downscale nhẹ để decode nhanh hơn (jsQR đủ nhạy với ~640px width)
-        const MAX_W = 720;
-        const scale = img.width > MAX_W ? MAX_W / img.width : 1;
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return resolve(false);
-        ctx.drawImage(img, 0, 0, w, h);
-        try {
-          const imageData = ctx.getImageData(0, 0, w, h);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "attemptBoth",
-          });
-          resolve(!!code && !!code.data);
-        } catch {
-          resolve(false);
-        }
-      };
-      img.onerror = () => resolve(false);
-      img.src = dataUrl;
-    });
-  }, []);
 
   // Auto-scan (QR luôn bật khi mount) 
   const startAutoScan = useCallback(() => {
     if (intervalRef.current) return;
     intervalRef.current = window.setInterval(async () => {
-      if (busy) return;
+      if (busyRef.current) return;
       const imageSrc = webcamRef.current?.getScreenshot();
       if (!imageSrc) return;
       // Chỉ gọi BE khi đã thấy QR trong frame
-      const hasQr = await detectQrInDataUrl(imageSrc);
-      if (!hasQr) return;
-      const blob = await (await fetch(imageSrc)).blob();
-      handleBlob(blob);
+      const qrAnalysis = await analyzeQrInDataUrl(imageSrc);
+      if (!qrAnalysis.data) return;
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      const blob = qrAnalysis.cropBlob || await (await fetch(imageSrc)).blob();
+      handleBlob(blob, false, qrAnalysis.data);
     }, 400);
-  }, [busy, detectQrInDataUrl, handleBlob]);
+  }, [analyzeQrInDataUrl, handleBlob]);
 
   const stopAutoScan = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -521,7 +631,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
 
       {/* ── Khung camera ───────────────────────────────────────────────────── */}
       <div className="webcam-wrapper">
-        {busy && scanMode === "ocr" ? (
+        {busy && analyzingPreview ? (
           analyzingPreview ? (
             <img src={analyzingPreview} alt="Đang phân tích" className="webcam-video" />
           ) : (
@@ -532,11 +642,23 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
             ref={webcamRef}
             audio={false}
             screenshotFormat="image/jpeg"
-            screenshotQuality={0.92}
+            screenshotQuality={1}
             videoConstraints={
               deviceId
-                ? { deviceId: { exact: deviceId } }
-                : { facingMode: "environment" }
+                ? {
+                  deviceId: { exact: deviceId },
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 },
+                  aspectRatio: { ideal: 16 / 9 },
+                  frameRate: { ideal: 30, max: 30 },
+                }
+                : {
+                  facingMode: { ideal: "environment" },
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 },
+                  aspectRatio: { ideal: 16 / 9 },
+                  frameRate: { ideal: 30, max: 30 },
+                }
             }
             className="webcam-video"
             onUserMedia={refreshCameras}
@@ -545,7 +667,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
         )}
 
         {/* Dropdown chọn camera — góc dưới phải */}
-        {cameras.length > 0 && !(busy && scanMode === "ocr") && (
+        {cameras.length > 0 && !analyzingPreview && (
           <div className="cam-select-wrap" title="Chọn camera">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -572,13 +694,13 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
             {scanMode === "qr" ? "Đưa QR vào khung" : "Đưa CCCD vào khung"}
           </span>
         </div>
-        {busy && scanMode === "ocr" && (
+        {busy && analyzingPreview && (
           <div className="scan-overlay">
             <span className="scan-spinner" />
             Đang xử lý...
           </div>
         )}
-        {scanMode === "qr" && !qrOverlayUrl && <div className="qr-laser" />}
+        {scanMode === "qr" && !qrOverlayUrl && !analyzingPreview && <div className="qr-laser" />}
         {scanMode === "qr" && !busy && !qrOverlayUrl && <div className="auto-badge">AUTO</div>}
 
         {/* Overlay hiển thị link QR vừa quét được */}
@@ -624,7 +746,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
             Chụp thủ công
           </button>
         )}
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} style={{ display: "none" }} />
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileUpload} style={{ display: "none" }} />
         <button className="ghost" onClick={() => fileInputRef.current?.click()}>
           Tải ảnh lên
         </button>
@@ -674,7 +796,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
 
       {/*Steps xử lý OCR*/}
       {scanMode === "ocr" && visibleSteps.length > 0 && (
-        <div className="ocr-steps">
+        <div className="ocr-steps" ref={stepsRef}>
           <p className="ocr-steps-title">Quá trình xử lý từng bước</p>
           {visibleSteps.map((step, i) => {
             const color = step.visible ? STEP_COLOR[step.status] : STEP_COLOR.pending;
@@ -703,8 +825,61 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
       )}
 
       {/*Kết quả quét gần nhất*/}
-      {lastResult && (
-        <div className="scan-result-card">
+      {scanMode === "ocr" && lastResult && (
+        <div className="scan-result-card" ref={resultRef}>
+          <div className="scan-result-header">
+            <span className="badge ocr">OCR</span>
+            {lastResult.match_result !== null && (
+              <span className={`match-badge ${lastResult.match_result === 1 ? "match-ok" : "match-fail"}`}>
+                {lastResult.match_result === 1 ? "Khop" : "Khong khop"}
+              </span>
+            )}
+            <span className="scan-result-id">#{lastResult.scan_id.slice(0, 8)}</span>
+          </div>
+          <div className="scan-result-body">
+            {lastResult.warped_image_url && (
+              <img
+                src={lastResult.warped_image_url}
+                alt="Anh da xu ly"
+                className="warped-thumb"
+              />
+            )}
+            {lastResult.student_info && renderStudentInfo(lastResult.student_info)}
+          </div>
+          <div className="raw-section">
+            <p className="raw-label">KET QUA PHAN TICH OCR</p>
+            <pre className="raw-pre">{lastResult.raw_text || "Khong doc duoc van ban nao."}</pre>
+          </div>
+          <div className="raw-section">
+            <p className="raw-label">Ket qua doi chieu</p>
+            <div className="student-info">
+              <div className="info-row">
+                <span>Trang thai</span>
+                <strong>{lastResult.match_result === 1 ? "Khop sinh vien" : "Khong khop sinh vien"}</strong>
+              </div>
+              <div className="info-row">
+                <span>Ho ten OCR</span>
+                <strong>{lastResult.extracted_info?.ho_va_ten || lastResult.student_info?.ho_va_ten || "Khong doc duoc"}</strong>
+              </div>
+              <div className="info-row">
+                <span>So CCCD</span>
+                <strong>{lastResult.extracted_info?.so_cccd || lastResult.student_info?.so_cccd || "Khong doc duoc"}</strong>
+              </div>
+              <div className="info-row">
+                <span>Ngay sinh</span>
+                <strong>{lastResult.extracted_info?.ngay_sinh || lastResult.student_info?.ngay_sinh || "Khong doc duoc"}</strong>
+              </div>
+              <div className="info-row">
+                <span>MSSV doi chieu</span>
+                <strong>{lastResult.student_info?.student_id || "Khong co"}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {lastResult && !(scanMode === "ocr" && lastResult.scan_type === "ocr") && (
+        <div className="scan-result-card" ref={resultRef}>
           <div className="scan-result-header">
             <span className={`badge ${lastResult.scan_type}`}>
               {lastResult.scan_type.toUpperCase()}
@@ -730,6 +905,33 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
             lastResult.student_info &&
             renderMessageActions(lastResult.student_info)}
           {lastResult.face_match && renderFaceMatch(lastResult.face_match)}
+          {lastResult.scan_type === "ocr" && (
+            <div className="raw-section">
+              <p className="raw-label">Ket qua cuoi cung</p>
+              <div className="student-info">
+                <div className="info-row">
+                  <span>Trang thai</span>
+                  <strong>{lastResult.match_result === 1 ? "Khop sinh vien" : "Khong khop sinh vien"}</strong>
+                </div>
+                <div className="info-row">
+                  <span>Ho ten OCR</span>
+                  <strong>{lastResult.extracted_info?.ho_va_ten || lastResult.student_info?.ho_va_ten || "Khong doc duoc"}</strong>
+                </div>
+                <div className="info-row">
+                  <span>So CCCD</span>
+                  <strong>{lastResult.extracted_info?.so_cccd || lastResult.student_info?.so_cccd || "Khong doc duoc"}</strong>
+                </div>
+                <div className="info-row">
+                  <span>Ngay sinh</span>
+                  <strong>{lastResult.extracted_info?.ngay_sinh || lastResult.student_info?.ngay_sinh || "Khong doc duoc"}</strong>
+                </div>
+                <div className="info-row">
+                  <span>MSSV doi chieu</span>
+                  <strong>{lastResult.student_info?.student_id || "Khong co"}</strong>
+                </div>
+              </div>
+            </div>
+          )}
           {lastResult.qr_data && (
             <div className="raw-section">
               <p className="raw-label">QR Raw Data</p>
@@ -818,8 +1020,13 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
                     <span className="row-time">{new Date(selected.created_at).toLocaleString("vi-VN")}</span>
                   </div>
                 </div>
-                {selected.image_url && (
-                  <img src={getImageUrl(selected.image_url) ?? undefined} alt="Ảnh đã quét" className="modal-image" />
+                {selected.image_url && !showDetailImage && (
+                  <button className="ghost" type="button" onClick={() => setShowDetailImage(true)}>
+                    Xem anh da quet
+                  </button>
+                )}
+                {selected.image_url && showDetailImage && (
+                  <img src={getImageUrl(selected.image_url) ?? undefined} alt="Anh da quet" className="modal-image" loading="lazy" />
                 )}
                 {selected.student_info
                   ? renderStudentInfo(selected.student_info)

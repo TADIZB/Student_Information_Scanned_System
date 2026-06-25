@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
+    "build:toserver": "tsc && vite build --base=/hsc/",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.0",
     "axios": "^1.13.4",
     "date-fns": "^4.4.0",
     "jsqr": "^1.4.0",

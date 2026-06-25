@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import re
 from typing import Any, Dict, List
 from urllib.parse import unquote
@@ -37,6 +38,7 @@ from ..services.student_matching import (
 )
 
 router = APIRouter(tags=["scan"])
+logger = logging.getLogger(__name__)
 
 
 # Helpers nội bộ 
@@ -107,6 +109,7 @@ async def process_scan(
     file: UploadFile = File(...),
     scan_mode: str = Form("qr"),
     engine: str = Form("tesseract"),
+    qr_data_client: str | None = Form(None),
     current_user: User | None = Depends(get_optional_user),
     db: DBSession = Depends(get_db),
 ) -> Dict[str, Any]:
@@ -126,12 +129,24 @@ async def process_scan(
         raw_data = await file.read()
 
         if scan_mode == "qr":
-            image = resize_image(load_image(raw_data))
-            warped = warp_perspective(pil_to_cv(image))
+            image = resize_image(load_image(raw_data), max_dim=1400)
+            cv_image = pil_to_cv(image)
+            warped = warp_perspective(cv_image)
             warped_bytes = _warped_to_png_bytes(warped.image)
 
-            qr_data = detect_qr(warped.image)
+            qr_data = qr_data_client.strip() if qr_data_client and qr_data_client.strip() else None
             if not qr_data:
+                qr_data = detect_qr(cv_image)
+            if not qr_data:
+                qr_data = detect_qr(warped.image)
+            if not qr_data:
+                logger.warning(
+                    "QR scan failed: client_qr=%s image_size=%s warped_size=%s content_type=%s",
+                    bool(qr_data_client and qr_data_client.strip()),
+                    getattr(image, "size", None),
+                    tuple(warped.image.shape[:2]) if warped.image is not None else None,
+                    file.content_type,
+                )
                 return {
                     "scan_id": "",
                     "scan_type": "qr",
@@ -385,7 +400,7 @@ async def process_scan(
 
         # Bước 1: Tải & tiền xử lý
         try:
-            image = resize_image(load_image(raw_data))
+            image = resize_image(load_image(raw_data), max_dim=1400)
             cv_image = pil_to_cv(image)
             steps.append({
                 "name": "1. Thu thập & chuẩn hoá hình ảnh",
@@ -492,6 +507,14 @@ async def process_scan(
                 sum(line["conf"] for b in blocks for line in b.get("lines", [])) / num_lines
                 if num_lines else 0.0
             )
+            logger.info(
+                "Tesseract OCR finished: raw_len=%s lines=%s avg_conf=%.1f",
+                len(raw_text or ""),
+                num_lines,
+                avg_conf,
+            )
+            if not raw_text:
+                logger.warning("Tesseract OCR returned empty raw_text")
             steps.append({
                 "name": "→ Nhận dạng văn bản (Tesseract OCR)",
                 "status": "success" if raw_text else "warning",

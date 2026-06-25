@@ -40,4 +40,5 @@ desktop.ini
 .claude/
 skills-lock.json
 
-microsoft_login.py
+deploy.py
+ecosystem.config.js

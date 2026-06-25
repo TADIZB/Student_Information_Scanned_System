@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import cv2
 import numpy as np
 import pytesseract
 from PIL import Image, ImageOps
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -297,39 +300,120 @@ def warp_perspective(image: np.ndarray) -> WarpResult:
 
 # ─── Preprocessing theo mode ─────────────────────────────────────────────────
 
+def _crop_box(image: np.ndarray, box: Tuple[int, int, int, int]) -> Optional[np.ndarray]:
+    h, w = image.shape[:2]
+    x1, y1, x2, y2 = box
+    x1 = max(0, min(w - 1, x1))
+    y1 = max(0, min(h - 1, y1))
+    x2 = max(x1 + 1, min(w, x2))
+    y2 = max(y1 + 1, min(h, y2))
+    if x2 - x1 < 80 or y2 - y1 < 80:
+        return None
+    return image[y1:y2, x1:x2]
+
+
+def _qr_candidate_regions(image: np.ndarray) -> List[np.ndarray]:
+    h, w = image.shape[:2]
+    boxes: List[Tuple[int, int, int, int]] = []
+
+    def add_rel(x1: float, y1: float, x2: float, y2: float) -> None:
+        boxes.append((int(w * x1), int(h * y1), int(w * x2), int(h * y2)))
+
+    add_rel(0.00, 0.00, 1.00, 1.00)
+    add_rel(0.12, 0.12, 0.88, 0.88)
+    add_rel(0.00, 0.00, 0.55, 0.55)
+    add_rel(0.45, 0.00, 1.00, 0.55)
+    add_rel(0.00, 0.45, 0.55, 1.00)
+    add_rel(0.45, 0.45, 1.00, 1.00)
+    add_rel(0.00, 0.00, 0.65, 0.65)
+    add_rel(0.35, 0.00, 1.00, 0.65)
+    add_rel(0.00, 0.35, 0.65, 1.00)
+    add_rel(0.35, 0.35, 1.00, 1.00)
+
+    pad = 0.06
+    for gy in range(3):
+        for gx in range(3):
+            add_rel(
+                max(0.0, gx / 3 - pad),
+                max(0.0, gy / 3 - pad),
+                min(1.0, (gx + 1) / 3 + pad),
+                min(1.0, (gy + 1) / 3 + pad),
+            )
+
+    regions: List[np.ndarray] = []
+    seen: Set[Tuple[int, int, int, int]] = set()
+    for box in boxes:
+        if box in seen:
+            continue
+        seen.add(box)
+        crop = _crop_box(image, box)
+        if crop is not None:
+            regions.append(crop)
+    return regions
+
+
+def _resize_qr_region(region: np.ndarray, min_dim: int = 900, max_dim: int = 1800) -> np.ndarray:
+    h, w = region.shape[:2]
+    longest = max(h, w)
+    if longest <= 0:
+        return region
+
+    scale = 1.0
+    if longest < min_dim:
+        scale = min_dim / longest
+    elif longest > max_dim:
+        scale = max_dim / longest
+
+    if abs(scale - 1.0) < 0.01:
+        return region
+    return cv2.resize(
+        region,
+        (max(1, int(w * scale)), max(1, int(h * scale))),
+        interpolation=cv2.INTER_CUBIC,
+    )
+
+
 def preprocess_for_qr(image: np.ndarray) -> List[np.ndarray]:
     """
     Trả về danh sách các biến thể ảnh để tăng tỷ lệ nhận diện QR.
     pyzbar tự xử lý xoay nên chỉ cần tập trung vào tương phản + scale.
     """
-    variants: List[np.ndarray] = [image]
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    variants: List[np.ndarray] = []
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    sharp_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    strong_kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
 
-    # CLAHE
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
-    variants.append(cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR))
+    for region in _qr_candidate_regions(image):
+        for base in (region, _resize_qr_region(region)):
+            variants.append(base)
+            gray = cv2.cvtColor(base, cv2.COLOR_BGR2GRAY) if base.ndim == 3 else base.copy()
 
-    # Otsu binary (rõ ràng hơn adaptive với QR đơn sắc)
-    _, otsu = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    variants.append(cv2.cvtColor(otsu, cv2.COLOR_GRAY2BGR))
+            enhanced = clahe.apply(gray)
+            variants.append(cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR))
 
-    # Adaptive — fallback cho ánh sáng không đều
-    thresh = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-    )
-    variants.append(cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR))
+            _, otsu = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            variants.append(cv2.cvtColor(otsu, cv2.COLOR_GRAY2BGR))
 
-    # Upscale 2x cho QR nhỏ (chụp xa)
-    h, w = image.shape[:2]
-    if max(h, w) < 1500:
-        up = cv2.resize(image, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-        variants.append(up)
+            adaptive = cv2.adaptiveThreshold(
+                enhanced,
+                255,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY,
+                31,
+                7,
+            )
+            variants.append(cv2.cvtColor(adaptive, cv2.COLOR_GRAY2BGR))
 
-    # Sharpen cho QR nhòe do rung tay
-    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    variants.append(cv2.filter2D(image, -1, kernel))
+            sharp = cv2.filter2D(base, -1, sharp_kernel)
+            variants.append(sharp)
+            strong = cv2.filter2D(base, -1, strong_kernel)
+            variants.append(strong)
 
+            strong_gray = cv2.cvtColor(strong, cv2.COLOR_BGR2GRAY) if strong.ndim == 3 else strong
+            _, strong_otsu = cv2.threshold(strong_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            variants.append(cv2.cvtColor(strong_otsu, cv2.COLOR_GRAY2BGR))
+
+    logger.debug("Generated %s QR preprocessing variants", len(variants))
     return variants
 
 
@@ -348,7 +432,7 @@ def preprocess_variants_for_ocr(image: np.ndarray) -> Tuple[List[Tuple[str, np.n
     # Chữ quá nhỏ là nguyên nhân số 1 khiến Tesseract đọc ra rác.
     h, w = gray.shape
     scale = 1.0
-    target = 1800
+    target = 1400
     if max(h, w) < target:
         scale = target / max(h, w)
         gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
@@ -374,6 +458,7 @@ def preprocess_variants_for_ocr(image: np.ndarray) -> Tuple[List[Tuple[str, np.n
             cv2.THRESH_BINARY, 31, 12,
         )),
     ]
+    variants = variants[:2]
     return variants, scale
 
 
@@ -522,7 +607,7 @@ def ocr_cccd(roi_image: np.ndarray) -> tuple[str, List[Dict[str, Any]]]:
     confidence cao nhất — robust hơn nhiều so với 1 lần PSM 6.
     """
     # PSM 6 (uniform block) + PSM 4 (single column) — hợp với layout 2 cột của CCCD
-    blocks = ocr_ensemble(roi_image, psms=(6, 4))
+    blocks = ocr_ensemble(roi_image, psms=(6,))
     # blocks đã được sort theo (y, x) trong _dedupe_lines → text đúng thứ tự trên→dưới
     lines = [line for b in blocks for line in b.get("lines", [])]
     raw_text = "\n".join(ln["text"] for ln in lines).strip()
@@ -536,10 +621,21 @@ def detect_qr(image: np.ndarray) -> str | None:
     Quét QR trên nhiều biến thể ảnh (gốc, tăng tương phản, xoay).
     Trả về chuỗi dữ liệu đầu tiên tìm được, None nếu không có.
     """
+    variants = preprocess_for_qr(image)
+    try:
+        detector = cv2.QRCodeDetector()
+        for variant in variants:
+            data, _, _ = detector.detectAndDecode(variant)
+            data = data.strip() if data else ""
+            if data:
+                return data
+    except Exception:
+        pass
+
     try:
         from pyzbar.pyzbar import decode
 
-        for variant in preprocess_for_qr(image):
+        for variant in variants:
             decoded_objects = decode(variant)
             for obj in decoded_objects:
                 data = obj.data.decode("utf-8").strip()
@@ -617,6 +713,22 @@ def _best_tesseract_lang(prefer_vie_only: bool = True) -> str:
     return "eng"
 
 
+_TESSERACT_RUNTIME_LOGGED = False
+
+
+def _log_tesseract_runtime(lang: str) -> None:
+    global _TESSERACT_RUNTIME_LOGGED
+    if _TESSERACT_RUNTIME_LOGGED:
+        return
+    _TESSERACT_RUNTIME_LOGGED = True
+    try:
+        version = pytesseract.get_tesseract_version()
+        langs = pytesseract.get_languages()
+        logger.info("Tesseract runtime detected: version=%s lang=%s available_langs=%s", version, lang, langs)
+    except Exception:
+        logger.exception("Tesseract runtime is not available or not configured")
+
+
 def _bbox_iou(a: List[int], b: List[int]) -> float:
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
@@ -680,6 +792,7 @@ def ocr_ensemble(image: np.ndarray, psms: Tuple[int, ...] = (6, 4)) -> List[Dict
     vì gây nhiều dòng rác làm hỏng dedupe.
     """
     lang = _best_tesseract_lang(prefer_vie_only=True)
+    _log_tesseract_runtime(lang)
     variants, scale = preprocess_variants_for_ocr(image)
     inv_scale = 1.0 / scale if scale else 1.0
 
@@ -692,13 +805,21 @@ def ocr_ensemble(image: np.ndarray, psms: Tuple[int, ...] = (6, 4)) -> List[Dict
                     lang=lang,
                     config=f"--psm {psm} --oem 3",
                     output_type=pytesseract.Output.DICT,
+                    timeout=12,
                 )
                 lines = _group_words_into_lines(data)
                 # Rescale bbox về không gian input
                 for line in lines:
                     line["bbox"] = _rescale_bbox(line["bbox"], inv_scale)
                 all_lines.extend(lines)
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Tesseract OCR failed for variant=%s psm=%s lang=%s: %r",
+                    variant_name,
+                    psm,
+                    lang,
+                    exc,
+                )
                 continue
 
     deduped = _dedupe_lines(all_lines)

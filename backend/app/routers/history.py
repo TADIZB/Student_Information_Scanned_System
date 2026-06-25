@@ -20,7 +20,7 @@ def get_scan_image(
     db: DBSession = Depends(get_db),
 ):
     record = (
-        db.query(ScanHistory)
+        db.query(ScanHistory.image_data, ScanHistory.image_mime)
         .filter(ScanHistory.id == scan_id, ScanHistory.user_id == current_user.id)
         .first()
     )
@@ -37,7 +37,13 @@ def scan_history(
     db: DBSession = Depends(get_db),
 ):
     records = (
-        db.query(ScanHistory)
+        db.query(
+            ScanHistory.id,
+            ScanHistory.scan_type,
+            ScanHistory.match_result,
+            ScanHistory.image_mime,
+            ScanHistory.created_at,
+        )
         .filter(ScanHistory.user_id == current_user.id)
         .order_by(ScanHistory.created_at.desc())
         .limit(50)
@@ -48,7 +54,7 @@ def scan_history(
             "id": str(r.id),
             "scan_type": r.scan_type,
             "match_result": r.match_result,
-            "image_url": f"/images/scan/{r.id}" if r.image_data else None,
+            "image_url": f"/images/scan/{r.id}" if r.image_mime else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in records
@@ -62,7 +68,16 @@ def scan_detail(
     db: DBSession = Depends(get_db),
 ):
     record = (
-        db.query(ScanHistory)
+        db.query(
+            ScanHistory.id,
+            ScanHistory.scan_type,
+            ScanHistory.match_result,
+            ScanHistory.raw_text,
+            ScanHistory.qr_data,
+            ScanHistory.image_mime,
+            ScanHistory.matched_student_id,
+            ScanHistory.created_at,
+        )
         .filter(ScanHistory.id == scan_id, ScanHistory.user_id == current_user.id)
         .first()
     )
@@ -81,7 +96,7 @@ def scan_detail(
         "match_result": record.match_result,
         "raw_text": record.raw_text,
         "qr_data": record.qr_data,
-        "image_url": f"/images/scan/{record.id}" if record.image_data else None,
+        "image_url": f"/images/scan/{record.id}" if record.image_mime else None,
         "created_at": record.created_at.isoformat() if record.created_at else None,
         "student_info": {
             "full_name": card.full_name,
