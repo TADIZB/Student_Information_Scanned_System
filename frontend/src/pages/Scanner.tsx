@@ -21,7 +21,7 @@ interface Props {
   onScanSuccess: (result: ScanResult) => void;
   scanMode: "qr" | "ocr";
   isLoggedIn: boolean;
-  // Chỉ tài khoản trường (@sis.hust.edu.vn) mới được gửi thông báo qua Teams/Outlook.
+  // Chỉ tài khoản trường (@sis.hust.edu.vn hoặc @hust.edu.vn) mới được gửi thông báo qua Teams/Outlook.
   isHustAccount?: boolean;
   onLoginClick?: () => void;
 }
@@ -221,7 +221,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
   };
 
   // Khối soạn + 2 nút gửi (Teams/email). Chỉ render khi sinh viên có email.
-  // Chỉ tài khoản trường (@sis.hust.edu.vn) mới được gửi — tài khoản thường bị chặn.
+  // Chỉ tài khoản trường mới được gửi — tài khoản thường bị chặn.
   const renderMessageActions = (info: StudentInfo) => {
     if (!info.email) return null;
     return (
@@ -232,7 +232,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
         </p>
         {!isHustAccount && (
           <p className="teams-locked-note">
-            🔒 Cần đăng nhập bằng <strong>tài khoản trường (@sis.hust.edu.vn)</strong> để
+            🔒 Cần đăng nhập bằng <strong>tài khoản trường (@sis.hust.edu.vn hoặc @hust.edu.vn)</strong> để
             gửi thông báo qua Teams/Outlook.
           </p>
         )}
@@ -249,7 +249,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
             type="button"
             className="teams-btn"
             disabled={!isHustAccount || !msgContent.trim()}
-            title={!isHustAccount ? "Chỉ dùng được với tài khoản trường (@sis.hust.edu.vn)" : undefined}
+            title={!isHustAccount ? "Chỉ dùng được với tài khoản trường (@sis.hust.edu.vn hoặc @hust.edu.vn)" : undefined}
             onClick={() => sendTeamsChat(info)}
           >
             💬 Gửi qua Teams
@@ -258,7 +258,7 @@ export default function Scanner({ onScanSuccess, scanMode, isLoggedIn, isHustAcc
             type="button"
             className="teams-btn email-btn"
             disabled={!isHustAccount || !msgContent.trim()}
-            title={!isHustAccount ? "Chỉ dùng được với tài khoản trường (@sis.hust.edu.vn)" : undefined}
+            title={!isHustAccount ? "Chỉ dùng được với tài khoản trường (@sis.hust.edu.vn hoặc @hust.edu.vn)" : undefined}
             onClick={() => sendEmail(info)}
           >
             ✉️ Gửi email

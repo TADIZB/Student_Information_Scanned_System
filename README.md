@@ -8,7 +8,7 @@
 
 - **QR thẻ sinh viên** — quét tự động qua camera, phát hiện QR ngay tại trình duyệt (jsQR) rồi mới gọi server để parse MSSV + đối chiếu DB.
 - **OCR Căn cước công dân** — chụp ảnh CCCD VN, server warp + OCR (Tesseract ensemble) + bóc các trường (số CCCD, họ tên, ngày sinh, giới tính, quốc tịch, quê quán, nơi thường trú, ngày hết hạn) + fuzzy match sinh viên theo họ tên + ngày sinh.
-- **Tài khoản** — đăng ký bằng email `@sis.hust.edu.vn` (tài khoản trường) hoặc username thường. Cookie session đơn giản, không JWT.
+- **Tài khoản** — đăng nhập trường bằng email `@sis.hust.edu.vn` hoặc `@hust.edu.vn`, hoặc dùng tài khoản username thường. Cookie session đơn giản, không JWT.
 - **Hồ sơ cá nhân** — sửa thông tin, đổi avatar, xem thống kê quét (tổng/QR/OCR/lookup/matched).
 - **Lịch sử quét** — xem lại từng phiên cùng ảnh đã warp.
 - **PWA** — cài đặt được như app.

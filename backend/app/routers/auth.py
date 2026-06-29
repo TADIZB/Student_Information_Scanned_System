@@ -135,7 +135,8 @@ async def login_microsoft(
     email = payload.email.strip().lower()
     if not is_hust_email(email):
         raise HTTPException(
-            status_code=422, detail="Vui lòng dùng email sinh viên @sis.hust.edu.vn."
+            status_code=422,
+            detail="Vui lòng dùng email trường",
         )
     if not payload.password:
         raise HTTPException(status_code=422, detail="Vui lòng nhập mật khẩu.")

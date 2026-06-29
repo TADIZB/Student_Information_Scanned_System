@@ -12,9 +12,9 @@ type View = "home" | "app" | "profile";
 type AuthMode = "login" | "register";
 
 // Tài khoản trường (Microsoft/HUST) mới được dùng chức năng gửi thông báo Teams/Outlook.
-const HUST_EMAIL_DOMAIN = "@sis.hust.edu.vn";
+const HUST_EMAIL_DOMAINS = ["@sis.hust.edu.vn", "@hust.edu.vn"];
 const isHustEmail = (email: string | null) =>
-  !!email && email.trim().toLowerCase().endsWith(HUST_EMAIL_DOMAIN);
+  !!email && HUST_EMAIL_DOMAINS.some((domain) => email.trim().toLowerCase().endsWith(domain));
 
 export default function App() {
   const [username, setUsername] = useState<string | null>(null);

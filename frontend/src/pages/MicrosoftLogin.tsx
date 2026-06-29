@@ -7,7 +7,8 @@ interface Props {
   initialEmail?: string;
 }
 
-const HUST_DOMAIN = "@sis.hust.edu.vn";
+const HUST_DOMAINS = ["@sis.hust.edu.vn", "@hust.edu.vn"];
+const HUST_DOMAIN_LABEL = HUST_DOMAINS.join(" hoặc ");
 type ToastKind = "success" | "error";
 
 const IconMicrosoft = () => (
@@ -68,8 +69,8 @@ export default function MicrosoftLogin({ onLogin, onBack, initialEmail = "" }: P
     e.preventDefault();
     setToast(null);
     const mail = email.trim();
-    if (!mail.toLowerCase().endsWith(HUST_DOMAIN)) {
-      setToast({ kind: "error", msg: `Vui lòng dùng email sinh viên ${HUST_DOMAIN}.` });
+    if (!HUST_DOMAINS.some((domain) => mail.toLowerCase().endsWith(domain))) {
+      setToast({ kind: "error", msg: `Vui lòng dùng email trường ${HUST_DOMAIN_LABEL}.` });
       return;
     }
     if (!password) {
@@ -128,7 +129,7 @@ export default function MicrosoftLogin({ onLogin, onBack, initialEmail = "" }: P
             <h2 style={{ margin: 0, fontSize: 20 }}>Đăng nhập tài khoản trường</h2>
           </div>
           <p style={{ margin: "0 0 18px", fontSize: 13, color: "#64748b" }}>
-            Dùng email sinh viên ({HUST_DOMAIN}) và mật khẩu đăng nhập của trường.
+            Dùng email trường ({HUST_DOMAIN_LABEL}) và mật khẩu đăng nhập của trường.
           </p>
 
           <form onSubmit={handleSubmit} className="login-form auth-pane">
@@ -144,7 +145,7 @@ export default function MicrosoftLogin({ onLogin, onBack, initialEmail = "" }: P
                 autoComplete="username"
                 disabled={loading}
               />
-              <label htmlFor="ms-email">Email {HUST_DOMAIN}</label>
+              <label htmlFor="ms-email">Email trường</label>
             </div>
 
             <div className={`field-floating${password ? " has-value" : ""}`}>

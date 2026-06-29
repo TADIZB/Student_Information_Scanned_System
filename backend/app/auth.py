@@ -18,8 +18,10 @@ from .models import User
 
 # ─── Cấu hình ────────────────────────────────────────────────────────────────
 
-HUST_EMAIL_DOMAIN = "@sis.hust.edu.vn"
-_HUST_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@sis\.hust\.edu\.vn$", re.IGNORECASE)
+HUST_EMAIL_DOMAINS = ("@sis.hust.edu.vn", "@hust.edu.vn")
+_HUST_EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9._%+-]+@(?:sis\.)?hust\.edu\.vn$", re.IGNORECASE
+)
 
 # Email thường (dùng cho tài khoản thường + quên mật khẩu): định dạng email hợp lệ chung.
 _EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
