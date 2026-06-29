@@ -1,0 +1,1111 @@
+\documentclass[../DoAn.tex]{subfiles}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage[skip=2pt]{caption} % chỉnh khoảng cách caption
+\usepackage{tabularx}
+\raggedbottom
+\begin{document}
+
+\section{Thiết kế kiến trúc}
+\subsection{Lựa chọn kiến trúc phần mềm}
+\subsubsection{Kiến trúc tổng quan hệ thống}
+
+Hệ thống được xây dựng theo mô hình tổng thể Client - Server. Trong đó, ứng dụng chia thành hai phân hệ chính: ứng dụng mobile dành cho người dùng cuối và hệ thống web admin dành cho quản trị viên.
+
+Hình \ref{fig:client_server_architecture} minh họa kiến trúc client-server
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{Hinhve/client-server.jpg}
+    \caption{Kiến trúc Client-Server (nguồn: \url{https://codelearn.io/sharing/tim-hieu-ve-mo-hinh-client-server})}
+    \label{fig:client_server_architecture}
+\end{figure}
+\FloatBarrier
+
+Phía mobile với client được phát triển bằng ngôn ngữ Dart và framework Flutter, server sử dụng Firebase. Phía web admin là một hệ thống web xây dựng theo mô hình client-server, trong đó phía client sử dụng ReactJS và phía server sử dụng Spring Boot. Cả hai phân hệ đều tuân theo nguyên tắc phân lớp rõ ràng nhằm đảm bảo khả năng mở rộng, bảo trì và phát triển lâu dài.
+
+\subsubsection{Kiến trúc phần mềm phía mobile (Flutter)}
+
+Ứng dụng mobile sử dụng kiến trúc dạng module với các package chính gồm:
+
+\begin{itemize}
+  \item \textbf{Model}: chứa các lớp dữ liệu đại diện cho cấu trúc thông tin (ví dụ: User, Order, Product...).
+  \item \textbf{Repository}: là lớp trung gian giữa dữ liệu và logic nghiệp vụ. Repository chịu trách nhiệm truy xuất, đồng bộ và cập nhật dữ liệu từ các nguồn khác nhau, trong đó có Firebase (Firestore và Storage).
+  \item \textbf{Controller (hoặc Provider)}: xử lý logic nghiệp vụ, nhận sự kiện từ người dùng và điều hướng dữ liệu giữa Model và giao diện.
+  \item \textbf{Screen}: chứa giao diện người dùng của từng màn hình như HomeScreen, SearchScreen, SettingScreen, v.v.
+\end{itemize}
+
+Hình \ref{fig:flutter_architecture} minh họa kiến trúc bên mobile:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{Hinhve/flutter-app-architecture-vs-mvc.png}
+    \caption{Kiến trúc flutter mobile (nguồn: \url{https://codewithandrea.com/articles/comparison-flutter-app-architectures/})}
+    \label{fig:flutter_architecture}
+\end{figure}
+\FloatBarrier
+Kiến trúc này tách biệt rõ ràng giữa giao diện, logic và dữ liệu nhằm đảm bảo tính dễ mở rộng và kiểm thử. Firebase đóng vai trò là backend chính cho ứng dụng mobile, cung cấp các dịch vụ như lưu trữ dữ liệu, xác thực người dùng, thông báo đẩy (Firebase Cloud Messaging).
+
+\subsubsection{Kiến trúc phần mềm phía web admin (ReactJS + Spring Boot)}
+Hệ thống web admin được phát triển theo mô hình Client - Server. Trong đó:
+
+\textbf{Phía client} sử dụng ReactJS với mô hình component-based, bao gồm:
+
+\begin{itemize}
+  \item \textbf{Component}: giao diện người dùng, chia nhỏ theo chức năng (quản lý người dùng, quản lý đơn hàng, thống kê)
+  \item \textbf{Service/API layer}: gửi yêu cầu HTTP đến server Spring Boot và xử lý dữ liệu phản hồi (dùng thư viện axios).
+  \item \textbf{State management}: sử dụng useEffect, useStateuseState để quản lý trạng thái ứng dụng.
+\end{itemize}
+
+\textbf{Phía server} sử dụng Spring Boot theo mô hình phân tầng rõ ràng:
+
+\begin{itemize}
+  \item \textbf{Entity}: đại diện cho các bảng trong cơ sở dữ liệu (User, Address, Order, v.v.)
+  \item \textbf{DTO (Data Transfer Object)}: trung gian chuyển dữ liệu giữa các tầng, giúp giảm bớt dữ liệu không cần thiết.
+  \item \textbf{Repository}: giao tiếp với cơ sở dữ liệu Firebase Firestore
+  \item \textbf{Service}: chứa logic nghiệp vụ chính, xử lý dữ liệu nhận từ controller và repository.
+  \item \textbf{Controller}: nhận yêu cầu từ client, gọi service xử lý và trả kết quả.
+  \item \textbf{Config}: chứa các cấu hình hệ thống như bảo mật (Spring Security), CORS, kết nối cơ sở dữ liệu, v.v.
+\end{itemize}
+
+Hình \ref{fig:spring_architecture} minh họa kiến trúc phân tầng của Spring Boot server:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{Hinhve/spring_architecture.png}
+    \caption{Kiến trúc phân tầng của server Spring Boot (nguồn: \url{https://shareprogramming.net/kien-truc-va-workflow-cua-spring-boot-framework/})}
+    \label{fig:spring_architecture}
+\end{figure}
+\FloatBarrier
+
+Cách tổ chức phân tầng rõ ràng này giúp hệ thống dễ bảo trì, mở rộng, cũng như tái sử dụng các thành phần.
+
+% \subsubsection{Kiến trúc phần mềm phía client}
+% Do ứng dụng sử dụng Recoil để lưu trữ các biến toàn cục phía client, nê em đã sử dụng kiến trúc Flux để áp dụng cho phần này. Flux là một kiến trúc ứng dụng do Facebook giới thiệu để quản lý luồng dữ liệu trong các ứng dụng React. Trong khi Recoil là một thư viện quản lý trạng thái cho React cũng được phát triển bởi Facebook, cung cấp một cách mạnh mẽ và linh hoạt để quản lý trạng thái trong ứng dụng React, bao gồm cả React Native. Như em đã trình bày ở phần trước, Recoil cung cấp các khái niệm về atoms và selectors để quản lý trạng thái và các phụ thuộc trạng thái, rất phù hợp với kiến trúc Flux. Kiến trúc Flux gồm có bốn nhân tố chính là Store, Reducers, Action và View. Trong đó, Stores trong Flux lưu trữ trạng thái ứng dụng. Nó tương đương với khái niệm Atoms trong Recoil khi được dùng để lưu trữ trạng thái và có thể được truy cập từ bất kỳ component nào. Tiếp đến, 
+\subsection{Thiết kế tổng quan}
+% Sinh viên vẽ biểu đồ gói UML (UML package diagram), nêu rõ sự phụ thuộc giữa các gói (package). SV cần vẽ các gói sao cho chúng được phân theo các tầng rõ ràng, không được sắp đặt package lộn xộn trong hình vẽ. Sinh viên chú ý các quy tắc thiết kế (Các gói không phụ thuộc lẫn nhau, gói tầng dưới không phụ thuộc gói tầng trên, không phụ thuộc bỏ qua tầng, v.v.) và cần giải thích sơ lược về mục đích/nhiệm vụ của từng package. SV tham khảo ví dụ minh họa trong Hình \ref{fig:Fig1}
+\subsubsection{Thiết kế tổng quan phía Mobile}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/ecommerce-mobile-2.png}
+    \caption{Biểu đồ package tổng quan phía Mobile}
+    \label{fig:pkg_mobile}
+\end{figure}
+\FloatBarrier
+Hình \ref{fig:pkg_mobile} mô tả biểu đồ package tổng quan phía Mobile.  Phần này bao gồm các gói: (i) gói controller là trung gian giữa dữ liệu và giao diện, phụ thuộc vào repository để truy vấn dữ liệu và model để parse thành model cho screen sử dụng, (ii) gói repository – chứa các logic kết nối với firebase và các truy vấn, trả về model cho controller sử dụng.  (iii) gói screen - chứa giao diện chính của ứng dụng, gọi controller để cung cấp xử lý logic, gọi common để tái sử dụng lại các component. (iv) model mô hình hóa dữ liệu các đối tượng trong hệ thống, (v) common chứa các component giao diện để tái sử dụng trong các màn hình screen, (vi) gói utils chứa hằng số, các hàm phụ trợ như format thời gian, text, đơn vị tiền tệ,... Biểu đồ này minh họa rõ hơn cho kiến trúc phần mềm phía Mobile ở phần [\ref{fig:flutter_architecture}] trước đó.
+
+\subsubsection{Thiết kế tổng quan phía Client Webadmin}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/ecommerce-webadmin-client.png}
+    \caption{Biểu đồ package tổng quan Client Webadmin}
+    \label{fig:clientWebPkg}
+\end{figure}
+\FloatBarrier
+Hình \ref{fig:clientWebPkg} mô tả biểu đồ package tổng quan phía Client của web admin. Phần này bao gồm các gói:
+\begin{itemize}
+    
+
+\item (i) routes/ – chịu trách nhiệm định tuyến và điều hướng trong ứng dụng. Gói này khai báo các tuyến (route) tương ứng với từng màn hình trong hệ thống và ánh xạ đến các component giao diện tương ứng trong pages/.
+
+\item (ii) pages/ – chứa các màn hình chính của ứng dụng (ví dụ: Dashboard, UserManagement, Settings, ...). Mỗi màn hình thường bao gồm phần logic xử lý riêng và sử dụng các component từ components/, đồng thời gọi API từ services/ để lấy dữ liệu cần thiết.
+
+\item (iii) components/ – chứa các thành phần UI có thể tái sử dụng, chẳng hạn như Button, Modal, Table, Form,... Các component này được sử dụng trong nhiều pages/ và layouts/ để đảm bảo tính thống nhất trong giao diện người dùng.
+
+\item (iv) services/ – chứa các hàm gửi yêu cầu HTTP đến server (thường sử dụng thư viện như Axios). Các hàm này giúp các pages/ và hooks/ lấy hoặc ghi dữ liệu thông qua các API backend. services/ thường phụ thuộc vào các giá trị cấu hình được định nghĩa trong config/.
+
+\item (v) layouts/ – định nghĩa các bố cục giao diện tổng thể như AdminLayout, AuthLayout,... Các layouts/ bao gồm các phần giao diện như header, sidebar, footer và sử dụng các thành phần từ components/.
+
+\item (vi) constants/ – chứa các hằng số dùng toàn hệ thống, như định danh quyền người dùng, trạng thái đơn hàng, định dạng ngày giờ,... constants/ có thể được sử dụng bởi mọi gói khác mà không gây ra phụ thuộc ngược.
+
+\item  (vii) config/ – chứa các cấu hình của ứng dụng như địa chỉ API, khóa môi trường,... Gói này thường được services/ và một số phần logic trong pages/ sử dụng.
+\end{itemize}
+Các gói này được thiết kế với nguyên tắc phân tách trách nhiệm rõ ràng, đồng thời tuân theo cấu trúc phụ thuộc một chiều, giúp dễ bảo trì và mở rộng. Cụ thể, pages/ là trung tâm sử dụng, gọi đến services/, components/, constants/, trong khi routes/ là nơi khởi tạo điều hướng giữa các pages/. Gói config/ và constants/ là các gói phụ trợ dùng chung nhưng không phụ thuộc vào các gói còn lại.
+\subsubsection{Thiết kế tổng quan phía Server Webadmin}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/ecommerce-webadmin-server-final.png}
+    \caption{Biểu đồ package tổng quan Server Webadmin}
+    \label{fig:serverWebPkg}
+\end{figure}
+\FloatBarrier
+Hình \ref{fig:serverWebPkg} mô tả biểu đồ package tổng quan phía Server của webadmin. Phần này bao gồm các gói: 
+\begin{itemize}
+    
+
+\item  (i) controller – chứa các lớp điều khiển (REST controller) chịu trách nhiệm tiếp nhận và xử lý các yêu cầu HTTP từ phía client, gọi đến service để thực hiện logic nghiệp vụ và trả về kết quả dạng response class;
+\item(ii) service – chứa các lớp nghiệp vụ trung gian, thực hiện xử lý logic chính của ứng dụng. Gói này tương tác với repository để truy xuất hoặc ghi dữ liệu, đồng thời sử dụng các lớp dto, mapper  và helper,commons để chuẩn hóa dữ liệu đầu vào/đầu ra.
+\item(iii) repository – chứa liên kết đến firebase được injection, dùng để truy xuất dữ liệu từ cơ sở dữ liệu
+\item(iv) dto (Data Transfer Object) – chứa các lớp trung gian đại diện cho dữ liệu trao đổi giữa client và server, giúp tách biệt mô hình dữ liệu nội bộ (entity) với mô hình dữ liệu dùng để giao tiếp bên ngoài, giảm các trường không dùng đến và bổ sung thêm 1 số trường cần thiết.
+\item(v) entity – chứa các lớp ánh xạ với bảng dữ liệu trong cơ sở dữ liệu, mỗi lớp đại diện cho một thực thể và được đánh dấu bằng các annotation như @Entity, @Table.
+\item(vi) mapper – chứa các interface dùng để chuyển đổi giữa entity và dto, sử dụng thư viện như MapStruct để tự động ánh xạ giữa dto và entity, rất thuận tiện khi các class này có nhiều trường phức tạp.
+\item(vii) response – chứa các lớp định nghĩa cấu trúc phản hồi gửi về phía client, thường bao gồm các trường như dto, statusCode,token... để chuẩn hóa định dạng phản hồi API.
+\item(viii) helper – chứa các lớp tiện ích và hàm hỗ trợ dùng chung trong toàn bộ ứng dụng, ví dụ như xử lý định dạng ngày giờ, mã hóa mật khẩu, gửi email, ghi log,...;
+\item(ix) config – chứa các lớp cấu hình như cấu hình bảo mật (Spring Security), cấu hình Swagger, cấu hình CORS, cấu hình bean,... để tùy chỉnh hoạt động của ứng dụng;
+\item(x) commons – chứa các hằng số (constants), enum, lớp lỗi dùng chung và định nghĩa exception toàn cục giúp tiêu chuẩn hóa xử lý lỗi trong hệ thống.
+\end{itemize}
+
+\subsection{Thiết kế chi tiết gói}
+\subsubsection{Thiết kế chi tiết gói cho tính năng "Xem thông báo" phía mobile}
+\vspace{-\baselineskip}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/Xem_thong_bao_pkg.png}
+    \caption{Biểu đồ package chi tiết cho tính năng "Xem thông báo" phía mobile}
+    \label{fig:viewNotificationPkg}
+\end{figure}
+\vspace{-\baselineskip}
+\FloatBarrier
+Hình \ref{fig:viewNotificationPkg} mô tả chi tiết gói cho tính năng "Xem thông báo" phía mobile. Lớp NotificationScreen tạo giao diện cho màn hình xem thông báo, nó gọi 1 đối tượng của Notification Controller để xử lý các logic nghiệp vụ, nó cũng gọi và sử dụng NotificationModel trong phương thức build của nó. Lớp controller chứa repository trong class của mình, để gọi phương thức truy vấn db và trả về dữ liệu, nó cũng gọi các class của gói utils để sử dụng các hàm hỗ trợ trong các phương thức của mình. 
+\subsubsection{Thiết kế chi tiết gói cho tính năng "Duyệt yêu cầu tham gia nhóm" phía mobile}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/Duyet_yc_tg_nhom_pkg.png}
+    \caption{Biểu đồ package chi tiết cho tính năng "Duyệt yêu cầu tham gia nhóm" phía mobile}
+    \label{fig:groupRequestPkg}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+Hình \ref{fig:groupRequestPkg} mô tả chi tiết gói cho tính năng "Duyệt yêu cầu tham gia nhóm" phía mobile. Lớp GroupRequestScreen tạo giao diện cho màn hình duyệt hoặc từ chối các lời mời tham gia nhóm, nó chứa group request controller trong object của mình để xử lý các logic nghiệp vụ, sử dụng GroupRequestModel trong phương thức build của nó. Lớp GroupRequestController chứa 2 repository là UserRepository và SaleGroupRepository để truy vấn db và trả về dữ liệu liên quan đến người mời, đến nhóm sẽ tham gia, ngoài ra nó cũng gọi notification controller trong 1 phương thức để gửi thông báo, có sử dụng voucher model trong 1 phương thức để tạo voucher cho các thành viên khi nhóm đạt đủ số lượng yêu cầu. Ngoài ra nó cũng gọi các class của gói utils để sử dụng các hàm hỗ trợ trong các phương thức của mình.
+\subsubsection{Thiết kế chi tiết gói cho tính năng "Xem chi tiết sản phẩm" phía mobile}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/Xem_sp_chi_tiet_pkg.png}
+    \caption{Biểu đồ package chi tiết cho tính năng "Xem chi tiết sản phẩm" phía mobile}
+    \label{fig:viewProductDetailPkg}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+Hình \ref{fig:viewProductDetailPkg} mô tả chi tiết gói cho tính năng "Xem chi tiết sản phẩm" phía mobile. Lớp ProductDetailScreen tạo giao diện cho màn hình xem chi tiết 1 sản phẩm, nó chứa cart controller và reviewcontroller trong object của mình để xử lý các logic nghiệp vụ liên quan đến giỏ hàng và viết bình luận của người dùng, sử dụng ProductModel trong phương thức build của nó. Nó gọi lớp Review screen, lớp Appbar và lớp Cart menu icon trong phương thức build của mình. Lớp ReviewController chứa 2 repository là UserRepository và ReviewRepository để truy vấn db và trả về dữ liệu liên quan đến người dùng hiện tại và các bình luận về sản phẩm, ngoài ra nó cũng gọi notification controller trong 1 phương thức để gửi thông báo và authentication repository trong 1 phương thức để xác thực, có sử dụng review model trong phương thức xử lý tạo bình luận mới. Lớp Cart Controller có gọi cart item model và product model trong các phương thức của mình.
+
+% Sinh viên thiết kế và lần lượt vẽ biểu đồ thiết kế cho từng package, hoặc một nhóm các package liên quan để giải quyết một vấn đề gì đó. Khi vẽ thiết kế gói, sinh viên chỉ cần đưa tên lớp, không cần chỉ ra các thành viên phương thức và thuộc tính. SV tham khảo ví dụ minh họa trong Hình \ref{fig:Fig2}.
+
+% Sinh viên cần vẽ rõ ràng quan hệ giữa các lớp trong biểu đồ. Các quan hệ bao gồm: phụ thuộc (dependency), kết hợp (association), kết tập (aggregation), hợp thành (composition), kế thừa (inheritance), và thực thi (implementation). Các quan hệ này đều đã được minh họa trong \ref{fig:Fig2}.
+
+% Sau khi vẽ hình minh họa, sinh viên cần giải thích ngắn gọn về thiết kế của mình. 
+
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics{Hinhve/Picture2.png}
+%     \caption{Ví dụ thiết kế gói}
+%     \label{fig:Fig2}
+% \end{figure}
+
+\section{Thiết kế chi tiết}
+\subsection{Thiết kế giao diện}
+% Phần này có độ dài từ hai đến ba trang. Sinh viên đặc tả thông tin về màn hình mà ứng dụng của mình hướng tới, bao gồm độ phân giải màn hình, kích thước màn hình, số lượng màu sắc hỗ trợ, v.v. Tiếp đến, sinh viên đưa ra các thống nhất/chuẩn hóa của mình khi thiết kế giao diện như thiết kế nút, điều khiển, vị trí hiển thị thông điệp phản hồi, phối màu, v.v. Sau cùng sinh viên đưa ra một số hình ảnh minh họa thiết kế giao diện cho các chức năng quan trọng nhất. Lưu ý, sinh viên không nhầm lẫn giao diện thiết kế với giao diện của sản phẩm sau cùng.
+Giao diện của ứng dụng thương mại điện tử được thiết kế phù hợp với kích thước của các loại điện thoại thông minh có kích thước từ 5 cho đến 7 inch. Các nút bấm khi thêm dữ liệu mới được thiết kế đồng bộ với phông chữ màu trắng và nền màu xanh lá cây. Các thông điệp phản hồi cũng được thống nhất một quy ước là nằm ở giữa bên dưới màn hình, thời gian xuất hiện là 4 giây. Dưới đây là hình ảnh minh họa thiết kế một số giao diện cho một vài chức năng của ứng dụng:
+\vspace{-\baselineskip}
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/home3.png}
+    \caption{Bố cục tổng quát của ứng dụng}
+    \label{fig:homeWire}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+Hình \ref{fig:homeWire} minh họa bố cục tổng quát của màn hình ứng dụng. Trong đó, một màn hình của ứng dụng sẽ gồm có ba thành phần chính là thanh tiêu đề ở trên cùng, ở giữa là thể hiện nội dung của màn hình và dưới cùng là thanh bottom menu để chuyển đến các màn hình khác.
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\linewidth]{Hinhve/wire_frame_store.jpg}
+    \caption{Thiết kế giao diện cho màn hình cửa hàng}
+    \label{fig:storeWire}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+Hình \ref{fig:storeWire} minh họa thiết kế giao diện cho màn hình cửa hàng. Màn hình này, sẽ bao gồm các thương hiệu trong hệ thống, các cửa hàng trong hệ thống và các sản phẩm đi kèm của mỗi thương hiêu, mỗi cửa hàng đó.
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\linewidth]{Hinhve/wire_frame_profile.jpg}
+    \caption{Thiết kế giao diện cho màn hình profile}
+    \label{fig:profileWire}
+\end{figure}
+\vspace{-\baselineskip}
+\FloatBarrier
+Hình \ref{fig:profileWire} minh họa thiết kế giao diện màn hình profile. Nơi đây người dùng có thể quản lý được mọi thông tin cũng như dữ liệu quan trọng, hay các tính năng hấp dẫn nhất. Mỗi mục sẽ có icon đại diện bên trái, tên tiêu đề mục ở trên và phần mô tả chi tiết mỗi mục ở phía dưới 
+
+
+\subsection{Thiết kế lớp}
+\subsubsection{Thiết kế lớp cho chức năng "Mời bạn bè tham gia nhóm"}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.1\linewidth]{Hinhve/class_diagram_invite_friend.png}
+    \caption{Biểu đồ lớp cho chức năng "Mời bạn bè tham gia nhóm"}
+    \label{fig:inviteFriendClassDiagram}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+Hình \ref{fig:inviteFriendClassDiagram} thể hiện biểu đồ lớp cho chức năng "Mời bạn bè tham gia nhóm". Dựa vào hình \ref{fig:inviteFriendClassDiagram}, em xin phép trình bày thiết kế của một số lớp như sau:
+
+Lớp \textbf{GroupRequest}: biểu diễn và lưu trữ các thông tin của request mời bạn bè tham gia nhóm săn sale mà mình mới tạo
+    \begin{itemize}
+        \item Thuộc tính:
+            \begin{itemize}
+                \item id: Định danh của 1 request cụ thể trong hệ thống
+                \item fromUserId: Định danh của người gửi request, tức là chủ sở hữu nhóm
+                \item toUserId: Định danh của người nhận request, tức bạn bè  của chủ 
+                \item groupId: Định danh của nhóm săn sale do chủ nhóm tạo
+                \item message: nội dung lời nhắn kèm theo yêu cầu 
+                \item status: trạng thái của request: pending, accept, hoặc reject
+                \item sendAt: thời gian gửi request
+                \item responsedAt: thời gian người nhận phản hồi yêu cầu
+            \end{itemize}
+        \item Phương thức:
+            \begin{itemize}
+                \item saveRequests(): Lưu thông tin của yêu cầu lên database.
+            \end{itemize}
+    \end{itemize}
+
+Lớp \textbf{InviteGroupController}: chứa các xử lý logic nghiệp vụ, là trung gian giữa lớp giao diện và lớp dữ liệu, gồm các phương thức: 
+   \begin{itemize}
+                \item createInviteRequest(): Nhận vào thông tin và yêu cầu request từ UI, tạo model request và lưu lên database
+                \item notifyUser(): Sau khi tạo và lưu request thành công thì gửi thông báo đến người gửi là đã gửi yêu cầu thành công và gửi đến người nhận là bạn có một lời mời vào nhóm mới.
+    \end{itemize}
+
+Lớp \textbf{FriendList}: tạo ra giao diện cho màn hình mời bạn bè tham gia nhóm, gồm các phương thức
+      \begin{itemize}
+                \item viewFriendList(): Hiển thị danh sách các bạn bè của người dùng để họ có thể lựa chọn gửi lời mời
+                \item inviteGroup(): Hiển thị button để mời 1 bạn bè vào group.
+    \end{itemize}
+
+
+Để thể hiện rõ mối quan hệ giữa các lớp trên trong chức năng "Mời bạn bè tham gia nhóm", em có vẽ thêm biểu đồ tuần tự cho chức năng này như trong hình \ref{fig:inviteFriendSequence}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.1\linewidth]{Hinhve/sq_diagram_invite_friend.png}
+    \caption{Biểu đồ tuần tự cho chức năng "Mời bạn bè tham gia nhóm"}
+    \label{fig:inviteFriendSequence}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+
+\subsubsection{Thiết kế lớp cho chức năng "Duyệt lời mời tham gia nhóm"}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/class_diagram_duyet_yc.png}
+    \caption{Biểu đồ lớp cho chức năng "Duyệt lời mời tham gia nhóm"}
+    \label{fig:classApproveRequest}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+Hình \ref{fig:classApproveRequest} thể hiện biểu đồ lớp cho chức năng "Duyệt lời mời tham gia nhóm". Dựa vào hình \ref{fig:classApproveRequest}, em xin phép trình bày thiết kế của một số lớp như sau:
+
+Lớp \textbf{GroupRequest}: biểu diễn và lưu trữ các thông tin của request mời bạn bè tham gia nhóm săn sale mà mình mới tạo
+    \begin{itemize}
+        \item Thuộc tính:
+            \begin{itemize}
+                \item id: Định danh của 1 request cụ thể trong hệ thống
+                \item fromUserId: Định danh của người gửi request, tức là chủ sở hữu nhóm
+                \item toUserId: Định danh của người nhận request, tức bạn bè  của chủ 
+                \item groupId: Định danh của nhóm săn sale do chủ nhóm tạo
+                \item message: nội dung lời nhắn kèm theo yêu cầu 
+                \item status: trạng thái của request: pending, accept, hoặc reject
+                \item sendAt: thời gian gửi request
+                \item responsedAt: thời gian người nhận phản hồi yêu cầu
+            \end{itemize}
+        \item Phương thức:
+            \begin{itemize}
+                \item saveRequests(): Lưu thông tin của yêu cầu lên database.
+            \end{itemize}
+    \end{itemize}
+    
+Lớp \textbf{Voucher} biểu diễn và lưu trữ các thông tin của một voucher giảm giá được sử dụng trong hệ thống
+    \begin{itemize}
+        \item Thuộc tính:
+            \begin{itemize}
+                \item id: Định danh của voucher trong hệ thống
+                \item title: Tên của voucher
+                \item description: Mô tả chi tiết thông tin của voucher
+                \item type: loại của voucher: thuộc 1 trong các loại: voucher freeship, voucher nhóm, voucher giảm giá cố định, voucher giảm theo category... 
+                \item discountValue: giá trị mà voucher sẽ giảm: tùy loại voucher có thể là phần trăm đơn hàng hoặc một số tiền cố định
+                \item quantity: số lượng phát hành voucher đó
+                \item startDate: ngày voucher bắt đầu có hiệu lực
+                \item endDate: ngày voucher hết hiệu lực
+                \item createdAt: ngày tạo voucher
+            \end{itemize}
+        \item Phương thức:
+            \begin{itemize}
+                \item saveVoucher(): Lưu thông tin của voucher lên database.
+            \end{itemize}
+    \end{itemize}
+    
+Lớp \textbf{GroupRequestController}: Để xử lý logic chấp nhận hoặc từ chối các lời mời mà bạn bè mời mình tham gia nhóm, bao gồm các phương thức
+    \begin{itemize}
+        \item Phương thức:
+            \begin{itemize}
+                \item getRequests: lấy tất cả các lời mời gửi tới người dùng hiện tại
+                \item acceptRequest: Chấp nhận lời mời tham gia nhóm của một người bạn
+                \item rejectRequest: từ chối lời mời tham gia nhóm của một người bạn
+                \item notifyUser: gửi thông báo đến người bạn rằng bạn đã từ chối lời mời tham gia nhóm của họ
+            \end{itemize}
+    \end{itemize}
+    
+Lớp \textbf{GroupRequestList} tạo giao diện màn hình duyệt lời mời tham gia nhóm, gồm các phương thức tương tác với người dùng như: 
+    \begin{itemize}
+        \item Phương thức:
+            \begin{itemize}
+                \item viewRequests: Hiển thị danh sách các lời mời để người dùng xem xét và duyệt
+                \item acceptRequest: có button accept, người dùng click vào thì gọi phương thức chấp nhận lời mời
+                \item rejectRequest: có button reject: người dùng click vào sẽ gọi các logic xử lý việc từ chối lời mời
+            \end{itemize}
+    \end{itemize}
+
+Để thể hiện rõ mối quan hệ giữa các lớp trên trong chức năng "Duyệt lời mời tham gia nhóm", em có vẽ thêm biểu đồ tuần tự cho chức năng này như trong hình \ref{fig:seqApproveRequest}
+\vspace{-\baselineskip}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{Hinhve/sq_diagram_duyet_yc.png}
+    \caption{Biểu đồ tuần tự cho chức năng "Duyệt lời mời tham gia nhóm"}
+    \label{fig:seqApproveRequest}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+% Phần này có độ dài từ ba đến bốn trang. Sinh viên trình bày thiết kế chi tiết các thuộc tính và phương thức cho một số lớp chủ đạo/quan trọng nhất của ứng dụng (từ 2-4 lớp). Thiết kế chi tiết cho các lớp khác, nếu muốn trình bày, sinh viên đưa vào phần phụ lục.
+
+% Để minh họa thiết kế lớp, sinh viên thiết kế luồng truyền thông điệp giữa các đối tượng tham gia cho 2 đến 3 use case quan trọng nào đó bằng biểu đồ trình tự (hoặc biểu đồ giao tiếp).
+
+
+% Phần này có độ dài từ ba đến bốn trang. Sinh viên trình bày thiết kế chi tiết các thuộc tính và phương thức cho một số lớp chủ đạo/quan trọng nhất của ứng dụng (từ 2-4 lớp). Thiết kế chi tiết cho các lớp khác, nếu muốn trình bày, sinh viên đưa vào phần phụ lục.
+
+% Để minh họa thiết kế lớp, sinh viên thiết kế luồng truyền thông điệp giữa các đối tượng tham gia cho 2 đến 3 use case quan trọng nào đó bằng biểu đồ trình tự (hoặc biểu đồ giao tiếp).
+
+
+% Phần này có độ dài từ ba đến bốn trang. Sinh viên trình bày thiết kế chi tiết các thuộc tính và phương thức cho một số lớp chủ đạo/quan trọng nhất của ứng dụng (từ 2-4 lớp). Thiết kế chi tiết cho các lớp khác, nếu muốn trình bày, sinh viên đưa vào phần phụ lục.
+% Để minh họa thiết kế lớp, sinh viên thiết kế luồng truyền thông điệp giữa các đối tượng tham gia cho 2 đến 3 use case quan trọng nào đó bằng biểu đồ trình tự (hoặc biểu đồ giao tiếp).
+% Phần này có độ dài từ ba đến bốn trang. Sinh viên trình bày thiết kế chi tiết các thuộc tính và phương thức cho một số lớp chủ đạo/quan trọng nhất của ứng dụng (từ 2-4 lớp). Thiết kế chi tiết cho các lớp khác, nếu muốn trình bày, sinh viên đưa vào phần phụ lục.
+% Để minh họa thiết kế lớp, sinh viên thiết kế luồng truyền thông điệp giữa các đối tượng tham gia cho 2 đến 3 use case quan trọng nào đó bằng biểu đồ trình tự (hoặc biểu đồ giao tiếp).
+\subsection{Thiết kế cơ sở dữ liệu}
+\subsubsection{Biểu đồ thực thể liên kết}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.2\linewidth]{Hinhve/ER-ĐA.drawio.png}
+    \caption{Biểu đồ thực thể liên kết }
+    \label{fig:er_diagram}
+\end{figure}
+\FloatBarrier
+\vspace{-\baselineskip}
+Hình \ref{fig:er_diagram} biểu diễn mô hình thực thể liên kết. Dựa vào mô hình thực thể liên kết này, em thiết kế cơ sở dữ liệu NoSql trên Firebase ở phần tiếp theo gồm 21 bảng.
+
+\subsubsection{Thiết kế cơ sở dữ liệu}
+\begin{itemize}
+    \item Bảng \textbf{brands}: Lưu thông tin các thương hiệu.
+    \item Bảng \textbf{categories}: Lưu thông tin các danh mục của các sản phẩm.
+     \item Bảng \textbf{shops}: Lưu thông tin các cửa hàng trong hệ thống
+    \item Bảng \textbf{products}: Lưu thông tin các sản phẩm.
+    \item Bảng \textbf{reviews}: Lưu thông tin các bình luận của người dùng về các sản phẩm.
+    \item Bảng \textbf{users}: Lưu thông tin về các người dùng trong hệ thống.
+    \item Bảng \textbf{daily\_checkins}: Lưu lịch sử checkin hằng ngày của người dùng trong hệ thống.
+    \item Bảng \textbf{missions}: Lưu thông tin về các nhiệm vụ, thử thách cho người dùng để đổi thưởng.
+    \item Bảng \textbf{sale\_groups}: Lưu thông tin về các nhóm săn sale mà người dùng tạo trong hệ thống.
+    \item Bảng \textbf{vouchers}: Lưu thông tin về các voucher giảm giá trong hệ thống.
+    \item Bảng \textbf{addresses}: Lưu các địa chỉ của người dùng trong hệ thống.
+    \item Bảng \textbf{orders}: Lưu thông tin liên quan đến các đơn hàng.
+    \item Bảng \textbf{user\_vouchers}: Lưu thông tin người dùng nào đã thu thập và sử dụng voucher nào.
+    \item Bảng \textbf{friend\_requests}: Lưu thông tin về các lời mời kết bạn.
+    \item Bảng \textbf{friends}: Lưu thông tin các mối quan hệ bạn bè của người dùng.
+    \item Bảng \textbf{group\_requests}: Lưu thông tin về lời mời tham gia nhóm săn sale.
+    \item Bảng \textbf{notifications}: Lưu các thông báo khi có cập nhật mới.  % <-- sửa "notifictions"
+    \item Bảng \textbf{reward\_items}: Lưu thông tin người dùng quy đổi điểm thưởng lấy quà hoặc voucher.
+    \item Bảng \textbf{user\_missions}: Lưu thông tin người dùng đã thực hiện các nhiệm vụ nào trong hệ thống.
+    \item Bảng \textbf{user\_events}: Lưu thông tin các tương tác của người dùng với hệ thống.
+     \item Bảng \textbf{chatbot}: Lưu thông tin các tương tác của người dùng với hệ thống.
+\end{itemize}
+
+
+Sau đây, em sẽ trình bày chi tiết thông tin của từng bảng:
+
+Mô tả chi tiết bảng brands
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \multicolumn{1}{c|}{\textbf{Kiểu dữ liệu}} & \textbf{Ràng buộc} & \multicolumn{1}{c|}{\textbf{Mô tả}} \\ \hline
+\textbf{id} & string & NOT NULL & Định danh của thương hiệu \\ \hline
+\textbf{name} & string & NOT NULL & Tên của thương hiệu \\ \hline
+\textbf{isFeatured} & boolean & NULL & Đánh dấu một thương hiệu có là thương hiệu nổi bật hay không \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng brands}
+\label{tab:brandsTable}
+\end{table}
+
+Mô tả chi tiết bảng categories
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \multicolumn{1}{c|}{\textbf{Kiểu dữ liệu}} & \textbf{Ràng buộc} & \multicolumn{1}{c|}{\textbf{Mô tả}} \\ \hline
+\textbf{id} & string & NOT NULL & Định danh của category \\ \hline
+\textbf{name} & string & NOT NULL & Tên của category \\ \hline
+\textbf{isFeatured} & boolean & NULL & Đánh dấu một category có là category nổi bật hay không \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng categories}
+\label{tab:categoriesTable}
+\end{table}
+
+Mô tả chi tiết bảng shops
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \multicolumn{1}{c|}{\textbf{Kiểu dữ liệu}} & \textbf{Ràng buộc} & \multicolumn{1}{c|}{\textbf{Mô tả}} \\ \hline
+\textbf{id} & string & NOT NULL & Định danh của shop \\ \hline
+\textbf{name} & string & NOT NULL & Tên của shop \\ \hline
+\textbf{isFeatured} & boolean & NULL & Đánh dấu một shop có là shop nổi bật hay không \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng shops}
+\label{tab:shopsTable}
+\end{table}
+Mô tả chi tiết bảng products
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{id} & string & NOT NULL & Định danh sản phẩm \\ \hline
+\textbf{title} & string & NOT NULL & Tiêu đề của sản phẩm \\ \hline
+\textbf{description} & string & NULL & Mô tả chi tiết sản phẩm, bao gồm đặc điểm, công dụng, màu sắc, chất liệu, trọng lượng, độ dài... \\ \hline
+\textbf{price} & string & NOT NULL & Giá bán sản phẩm  \\ \hline
+\textbf{stock} & number & NOT NULL & Số lượng hàng tồn kho của sản phẩm \\ \hline
+\textbf{isFeatured} & boolean & NULL & Xác định sản phẩm có được đánh dấu là nổi bật hay không \\ \hline
+\textbf{brandId} & string & NULL & ID thương hiệu liên kết với sản phẩm \\ \hline
+\textbf{categoryIds} & array of strings & NULL & Danh sách các ID danh mục mà sản phẩm thuộc về \\ \hline
+\textbf{shopId} & string & NOT NULL & ID của cửa hàng bán sản phẩm \\ \hline
+\textbf{images} & array of strings & NULL & Danh sách các URL hình ảnh của sản phẩm \\ \hline
+\textbf{details} & map & NULL & Các chi tiết bổ sung về sản phẩm (ví dụ: chất liệu, nguồn gốc, thông số kỹ thuật...) \\ \hline
+\textbf{createdAt} & timestamp & NOT NULL & Thời điểm tạo sản phẩm \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng products}
+\label{tab:productsTable}
+\end{table}
+\FloatBarrier
+
+Mô tả chi tiết bảng reviews
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{reviewId} & string & NOT NULL & Định danh duy nhất của đánh giá \\ \hline
+\textbf{productId} & string & NOT NULL & ID sản phẩm mà đánh giá này thuộc về \\ \hline
+\textbf{userId} & string & NOT NULL & ID người dùng thực hiện đánh giá \\ \hline
+\textbf{comment} & string & NULL & Nội dung bình luận của người dùng về sản phẩm \\ \hline
+\textbf{rating} & number & NOT NULL & Điểm đánh giá của sản phẩm (ví dụ: từ 1 đến 5 sao) \\ \hline
+\textbf{imageUrls} & array of strings & NULL & Danh sách các URL hình ảnh minh họa do người dùng đăng cùng đánh giá \\ \hline
+\textbf{videoUrls} & array of strings & NULL & Danh sách các URL video minh họa (nếu có) đính kèm đánh giá \\ \hline
+\textbf{isAnonymous} & boolean & NOT NULL & Xác định người dùng đánh giá có ẩn danh hay không \\ \hline
+\textbf{createdAt} & timestamp & NOT NULL & Thời điểm đánh giá được tạo \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng reviews}
+\label{tab:reviewsTable}
+\end{table}
+
+Mô tả chi tiết bảng users
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{dateOfBirth} & timestamp & NOT NULL & Ngày sinh của người dùng (theo múi giờ UTC+7) \\ \hline
+\textbf{email} & string & NOT NULL & Địa chỉ email của người dùng \\ \hline
+\textbf{fcmToken} & string & NULL & Mã token Firebase dùng để gửi thông báo đến thiết bị của người dùng \\ \hline
+\textbf{firstName} & string & NOT NULL & Họ của người dùng \\ \hline
+\textbf{lastName} & string & NOT NULL & Tên của người dùng \\ \hline
+\textbf{gender} & string & NOT NULL & Giới tính của người dùng \\ \hline
+\textbf{phoneNumber} & string & NOT NULL & Số điện thoại của người dùng \\ \hline
+\textbf{points} & number & NOT NULL & Tổng điểm tích lũy của người dùng \\ \hline
+\textbf{profilePicture} & string & NULL & Đường dẫn đến ảnh đại diện của người dùng (URL Firebase) \\ \hline
+\textbf{role} & string & NOT NULL & Vai trò của người dùng trong hệ thống (ví dụ: admin, user) \\ \hline
+\textbf{status} & string & NOT NULL & Trạng thái hoạt động của người dùng (ví dụ: Active, Blocked) \\ \hline
+\textbf{userName} & string & NOT NULL & Tên người dùng (username) dùng để đăng nhập hoặc hiển thị \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng users}
+\label{tab:usersTable}
+\end{table}
+
+Mô tả chi tiết bảng daily\_checkins
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{id} & string & NOT NULL & Định danh duy nhất cho mỗi lần điểm danh hàng ngày \\ \hline
+\textbf{user\_id} & string & NOT NULL & ID của người dùng thực hiện điểm danh \\ \hline
+\textbf{check\_in\_date} & timestamp & NOT NULL & Thời điểm người dùng thực hiện điểm danh (theo múi giờ UTC+7) \\ \hline
+\textbf{reward} & number & NOT NULL & Số điểm thưởng mà người dùng nhận được khi điểm danh \\ \hline
+\textbf{streak\_count} & number & NOT NULL & Số ngày liên tiếp người dùng đã điểm danh \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng daily\_checkins}
+\label{tab:daily_checkinsTable}
+\end{table}
+
+Mô tả chi tiết bảng missions
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{id} & string & NOT NULL & Định danh duy nhất cho nhiệm vụ \\ \hline
+\textbf{title} & string & NOT NULL & Tiêu đề ngắn gọn mô tả nhiệm vụ \\ \hline
+\textbf{description} & string & NOT NULL & Mô tả chi tiết về nhiệm vụ cần thực hiện \\ \hline
+\textbf{type} & string & NOT NULL & Mô tả loại nhiệm vụ (ví dụ: \texttt{write\_review}) \\ \hline
+\textbf{goal} & number & NOT NULL & Số lượng hành động người dùng cần thực hiện để hoàn thành nhiệm vụ \\ \hline
+\textbf{threshold} & number & NOT NULL & Yêu cầu về giá trị đơn hàng với một số nhiệm vụ liên quan đến đơn ) \\ \hline
+\textbf{reward} & number & NOT NULL & Số điểm thưởng người dùng nhận được sau khi hoàn thành nhiệm vụ \\ \hline
+\textbf{durationInHours} & number & NOT NULL & Khoảng thời gian hiệu lực của nhiệm vụ (tính bằng giờ; 0 nếu không giới hạn) \\ \hline
+\textbf{durationType} & string & NOT NULL & Kiểu giới hạn thời gian (ví dụ: \texttt{daily}, \texttt{weekly}) \\ \hline
+\textbf{startTime} & timestamp & NULL & Thời gian bắt đầu hiệu lực của nhiệm vụ (nếu có) \\ \hline
+\textbf{endTime} & timestamp & NULL & Thời gian kết thúc hiệu lực của nhiệm vụ (nếu có) \\ \hline
+\textbf{imgUrl} & string & NULL & Đường dẫn ảnh minh họa cho nhiệm vụ \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng missions}
+\label{tab:missionsTable}
+\end{table}
+
+Mô tả cho tiết bảng sale\_groups
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|p{1.5cm}|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{id} & string & NOT NULL & Định danh duy nhất cho nhóm mua chung \\ \hline
+\textbf{name} & string & NOT NULL & Tên nhóm mua chung \\ \hline
+\textbf{brandId} & string & NOT NULL & ID thương hiệu mà các sản phẩm sẽ đc áp dụng cho nhóm chung \\ \hline
+\textbf{categoryId} & string & NULL & ID danh mục  mà các sản phẩm sẽ đc áp dụng cho nhóm chung \\ \hline
+\textbf{shopId} & string & NULL & ID cửa hàng  mà các sản phẩm sẽ đc áp dụng cho nhóm chung \\ \hline
+\textbf{creatorId} & string & NOT NULL & ID người tạo nhóm \\ \hline
+\textbf{participants} & array of strings & NOT NULL & Danh sách ID người tham gia nhóm mua chung \\ \hline
+\textbf{currentParticipants} & number & NOT NULL & Số lượng người đã tham gia hiện tại \\ \hline
+\textbf{targetParticipants} & number & NOT NULL & Số lượng người tối thiểu để kích hoạt ưu đãi \\ \hline
+\textbf{discount} & number & NOT NULL & Mức giảm giá được áp dụng khi nhóm đủ số lượng \\ \hline
+\textbf{selectedObjectName} & string & NOT NULL & Tên sản phẩm hoặc thương hiệu được áp dụng mua chung \\ \hline
+\textbf{status} & string & NOT NULL & Trạng thái của nhóm (ví dụ: \texttt{pending}, \texttt{completed}) \\ \hline
+\textbf{createdAt} & string & NOT NULL & Thời điểm nhóm được tạo \\ \hline
+\textbf{expiresAt} & string & NOT NULL & Thời điểm nhóm hết hạn nếu chưa đủ người tham gia \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng sale\_groups}
+\label{tab:sale_groupsTable}
+\end{table}
+\FloatBarrier   
+Mô tả chi tiết bảng vouchers
+
+\begin{longtable}{|c|c|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\
+\hline
+\endfirsthead
+
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\
+\hline
+\endhead
+
+\hline
+\endfoot
+
+\hline
+\endlastfoot
+
+\textbf{id} & string & NOT NULL & Định danh duy nhất của voucher \\
+\hline
+\textbf{title} & string & NOT NULL & Tiêu đề của voucher \\
+\hline
+\textbf{description} & string & NULL & Mô tả chi tiết về voucher \\
+\hline
+\textbf{type} & string & NOT NULL & Loại voucher (ví dụ: \texttt{fixed\_discount}) \\
+\hline
+\textbf{discountValue} & number & NOT NULL & Giá trị giảm giá của voucher (ví dụ: 50000 VNĐ) \\
+\hline
+\textbf{maxDiscount} & number & NULL & Giá trị giảm tối đa cho đơn hàng \\
+\hline
+\textbf{minimumOrder} & number & NULL & Giá trị đơn hàng tối thiểu để sử dụng voucher \\
+\hline
+\textbf{quantity} & number & NOT NULL & Tổng số lượng voucher được phát hành \\
+\hline
+\textbf{remainingQuantity} & number & NOT NULL & Số lượng voucher còn lại có thể sử dụng \\
+\hline
+\textbf{requiredPoints} & number & NULL & Số điểm cần để đổi voucher (nếu có) \\
+\hline
+\textbf{isRedeemableByPoint} & boolean & NOT NULL & Xác định voucher có thể đổi bằng điểm thưởng hay không \\
+\hline
+\textbf{isActive} & boolean & NOT NULL & Trạng thái hoạt động của voucher \\
+\hline
+\textbf{startDate} & timestamp & NOT NULL & Ngày bắt đầu hiệu lực của voucher \\
+\hline
+\textbf{endDate} & timestamp & NOT NULL & Ngày kết thúc hiệu lực của voucher \\
+\hline
+\textbf{createdAt} & timestamp & NOT NULL & Thời điểm tạo voucher \\
+\hline
+\textbf{updatedAt} & timestamp & NULL & Thời điểm cập nhật gần nhất của voucher \\
+\hline
+
+\caption{Chi tiết bảng vouchers}
+\label{tab:vouchersTable}
+\end{longtable}
+
+
+Mô tả chi tiết bảng addresses
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|p{3.5cm}|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{Id} & string & NOT NULL & Định danh duy nhất của địa chỉ \\ \hline
+\textbf{Name} & string & NOT NULL & Tên người nhận hàng \\ \hline
+\textbf{PhoneNumber} & string & NOT NULL & Số điện thoại người nhận\\ \hline
+\textbf{Street} & string & NOT NULL & Tên đường hoặc thông tin chi tiết về địa chỉ cụ thể \\ \hline
+\textbf{Commune} & string & NOT NULL & Phường/xã nơi địa chỉ thuộc về \\ \hline
+\textbf{District} & string & NOT NULL & Quận/huyện nơi địa chỉ thuộc về \\ \hline
+\textbf{City} & string & NOT NULL & Thành phố nơi địa chỉ nằm trong \\ \hline
+\textbf{Country} & string & NOT NULL & Quốc gia nơi địa chỉ thuộc về \\ \hline
+\textbf{SelectedAddress} & boolean & NOT NULL & Địa chỉ này có đang được chọn làm địa chỉ giao hàng chính hay không \\ \hline
+\textbf{DateTime} & timestamp & NOT NULL & Thời điểm địa chỉ được tạo hoặc cập nhật \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng addresses}
+\label{tab:addressesTable}
+\end{table}
+
+Mô tả chi tiết bảng orders
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{id} & string & NOT NULL & Mã định danh duy nhất của đơn hàng \\ \hline
+\textbf{orderDate} & timestamp & NOT NULL & Thời điểm người dùng đặt hàng \\ \hline
+\textbf{deliveryDate} & timestamp & NOT NULL & Ngày giao hàng dự kiến \\ \hline
+\textbf{updatedAt} & timestamp & NOT NULL & Thời điểm cuối cùng đơn hàng được cập nhật \\ \hline
+\textbf{status} & string & NOT NULL & Trạng thái đơn hàng (ví dụ: delivered, pending) \\ \hline
+\textbf{paymentMethod} & string & NOT NULL & Phương thức thanh toán (ví dụ: Paypal, Momo, COD) \\ \hline
+\textbf{totalAmount} & number & NOT NULL & Tổng giá trị đơn hàng \\ \hline
+\textbf{items} & array of maps & NOT NULL & Danh sách các sản phẩm trong đơn hàng \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng orders}
+\label{tab:ordersTable}
+\end{table}
+
+Mô tả chi tiết bảng claimed\_vouchers 
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|p{3.5cm}|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{claimed\_at} & timestamp & NOT NULL & Thời điểm voucher được người dùng nhận \\ \hline
+\textbf{is\_used} & boolean & NOT NULL & Trạng thái voucher đã được sử dụng hay chưa \\ \hline
+\textbf{used\_at} & timestamp & NULLABLE & Thời điểm voucher được sử dụng  \\ \hline
+\textbf{voucher\_id} & string & NOT NULL & Mã định danh của voucher tương ứng \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng claimed\_vouchers}
+\label{tab:claimedVouchersTable}
+\end{table}
+
+Mô tả chi tiết bảng friend\_requests
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|p{3.5cm}|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{fromUserId} & string & NOT NULL & ID của người gửi lời mời kết bạn \\ \hline
+\textbf{toUserId} & string & NOT NULL & ID của người nhận lời mời kết bạn \\ \hline
+\textbf{message} & string & NULLABLE & Nội dung lời nhắn kèm theo lời mời kết bạn \\ \hline
+\textbf{sentAt} & timestamp & NOT NULL & Thời điểm gửi lời mời kết bạn \\ \hline
+\textbf{respondedAt} & timestamp & NULLABLE & Thời điểm người nhận phản hồi lời mời kết bạn \\ \hline
+\textbf{status} & string & NOT NULL & Trạng thái của lời mời (ví dụ: pending, accepted, rejected) \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng friend\_requests}
+\label{tab:friendRequestsTable}
+\end{table}
+\FloatBarrier
+\newpage
+Mô tả chi tiết bảng friends
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{id} & string & NOT NULL & Mã định danh của mối quan hệ bạn bè \\ \hline
+\textbf{friendId} & string & NOT NULL & ID của người bạn trong mối quan hệ \\ \hline
+\textbf{friendName} & string & NOT NULL & Tên hiển thị của người bạn \\ \hline
+\textbf{status} & string & NOT NULL & Trạng thái của mối quan hệ bạn bè (ví dụ: active, blocked) \\ \hline
+\textbf{createdAt} & string & NOT NULL & Thời điểm mối quan hệ được tạo \\ \hline
+\textbf{updatedAt} & string & NOT NULL & Thời điểm mối quan hệ được cập nhật gần nhất \\ \hline
+\textbf{acceptedAt} & string  & NOT NULL & Thời điểm lời mời kết bạn được chấp nhận \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng friends}
+\label{tab:friendsTable}
+\end{table}
+
+Mô tả chi tiết bảng group\_requests
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|p{3.5cm}|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{fromUserId} & string & NOT NULL & ID của người gửi lời mời tham gia nhóm \\ \hline
+\textbf{toUserId} & string & NOT NULL & ID của người nhận lời mời tham gia nhóm \\ \hline
+\textbf{groupId} & string & NOT NULL & ID của nhóm mà người nhận được mời tham gia \\ \hline
+\textbf{message} & string & NULLABLE & Nội dung lời nhắn đi kèm lời mời vào nhóm \\ \hline
+\textbf{sentAt} & timestamp & NOT NULL & Thời điểm gửi lời mời tham gia nhóm \\ \hline
+\textbf{respondedAt} & timestamp & NULLABLE & Thời điểm người nhận phản hồi lời mời \\ \hline
+\textbf{status} & string & NOT NULL & Trạng thái lời mời (ví dụ: pending, accepted, rejected) \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng group\_requests}
+\label{tab:groupRequestsTable}
+\end{table}
+
+Mô tả chi tiết bảng notifications
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{id} & string & NOT NULL & Mã định danh duy nhất của thông báo \\ \hline
+\textbf{title} & string & NOT NULL & Tiêu đề của thông báo \\ \hline
+\textbf{message} & string & NOT NULL & Nội dung chính của thông báo \\ \hline
+\textbf{type} & string & NOT NULL & Loại thông báo (ví dụ: voucher, system, order) \\ \hline
+\textbf{read} & boolean & NOT NULL & Trạng thái đã đọc của thông báo (true/false) \\ \hline
+\textbf{timestamp} & timestamp & NOT NULL & Thời điểm thông báo được gửi \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng notifications}
+\label{tab:notificationsTable}
+\end{table}
+
+Mô tả chi tiết bảng reward\_items
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|p{3.5cm}|l|p{6cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{points\_used} & number & NOT NULL & Số điểm đã sử dụng để đổi phần thưởng \\ \hline
+\textbf{redeemed\_at} & timestamp & NOT NULL & Thời điểm người dùng đổi phần thưởng \\ \hline
+\textbf{voucher\_id} & string & NOT NULL & ID của voucher tương ứng với phần thưởng đã đổi \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng reward\_items}
+\label{tab:rewardItemsTable}
+\end{table}
+
+Mô tả chi tiết bảng user\_missions
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{missionId} & string & NOT NULL & ID nhiệm vụ được gán cho người dùng \\ \hline
+\textbf{type} & string & NOT NULL & Loại nhiệm vụ (ví dụ: quickOrder) \\ \hline
+\textbf{status} & string & NOT NULL & Trạng thái nhiệm vụ (ví dụ: inProgress, completed, expired) \\ \hline
+\textbf{progress} & number & NOT NULL & Tiến độ hoàn thành nhiệm vụ \\ \hline
+\textbf{startedAt} & string & NOT NULL & Thời điểm bắt đầu nhiệm vụ  \\ \hline
+\textbf{expiredAt} & string & NOT NULL & Thời điểm nhiệm vụ hết hạn  \\ \hline
+\textbf{completedAt} & timestamp & NULLABLE & Thời điểm hoàn thành nhiệm vụ (nếu đã hoàn thành) \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng user\_missions}
+\label{tab:userMissionsTable}
+\end{table}
+
+Mô tả chi tiết bảng user\_events
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{event} & string & NOT NULL & Tên sự kiện do người dùng thực hiện (ví dụ: favourite\_product) \\ \hline
+\textbf{product\_id} & string & NOT NULL & ID của sản phẩm liên quan đến sự kiện \\ \hline
+\textbf{session\_id} & string & NOT NULL & Mã phiên người dùng để theo dõi hành vi theo từng phiên duyệt \\ \hline
+\textbf{timestamp} & timestamp & NOT NULL & Thời điểm sự kiện diễn ra \\ \hline
+\textbf{user\_id} & string & NOT NULL & ID người dùng thực hiện sự kiện \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng user\_events}
+\label{tab:userEventsTable}
+\end{table}
+
+Mô tả chi tiết bảng chatbot
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|l|p{7cm}|}
+\hline
+\textbf{Thuộc tính} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả} \\ \hline
+\textbf{createdAt} & string (ISO 8601) & NOT NULL & Thời gian tin nhắn được tạo, định dạng chuỗi thời gian chuẩn ISO 8601 (ví dụ: "2025-06-12T23:44:26.821466") \\ \hline
+\textbf{isUser} & boolean & NOT NULL & Cờ xác định xem tin nhắn có phải do người dùng gửi không. \texttt{true} nếu do người dùng gửi, \texttt{false} nếu do chatbot gửi. \\ \hline
+\textbf{text} & string & NOT NULL & Nội dung tin nhắn được gửi trong đoạn hội thoại giữa người dùng và chatbot. Có thể chứa văn bản, biểu tượng hoặc đề xuất sản phẩm. \\ \hline
+\end{tabular}
+\caption{Chi tiết bảng chatbot}
+\label{tab:chatbotEventsTable}
+\end{table}
+
+
+% Phần này có độ dài từ hai đến bốn trang. Sinh viên thiết kế, vẽ và giải thích biểu đồ thực thể liên kết (E-R diagram). Từ đó, sinh viên thiết kế cơ sở dữ liệu tùy theo hệ quản trị cơ sở dữ liệu mà mình sử dụng (SQL, NoSQL, Firebase, v.v.)
+\section{Xây dựng ứng dụng}
+\subsection{Thư viện và công cụ sử dụng}
+Bảng \ref{tab:my_label} liệt kê các công cụ, ngôn ngữ lập trình, API, thư viện, IDE, công cụ kiểm thử, v.v. mà em đã sử dụng để phát triển ứng dụng.
+\begin{table}[H]
+\centering{}
+    \begin{tabular}{|p{4cm}|p{3cm}|p{7cm}|}
+        \hline
+        \textbf{Mục đích} & \textbf{Công cụ}       & \textbf{Địa chỉ URL}    \\ \hline
+        IDE lập trình web front-end    & Visual Studio Code & \url{https://code.visualstudio.com/} \\ \hline
+        IDE lập trình web backend    & IntelliJ IDEA & \url{https://www.jetbrains.com/idea/#} \\ \hline
+        IDE lập trình mobile    & Android Studio & \url{https://developer.android.com/studio}  \\ \hline
+        Framework Xây dựng app mobile              & Flutter 3.24.4                 & \url{https://flutter.dev/}                     \\ \hline
+         Framework xây dựng web front-end              & ReactJs                   & \url{https://react.dev/} \\ \hline
+         Framework xây dựng web backend & Springboot & \url{https://spring.io/projects/spring-boot}
+         \\ \hline
+         Ngôn ngữ lập trình app mobile & Dart & \url{https://dart.dev/}
+         \\ \hline
+         Kiểm thử API & Postman &
+         \url{https://www.postman.com/}
+         \\ \hline
+         Lưu trữ database & Firebase Firestore & \url{https://firebase.google.com/docs/firestore?hl=en} 
+         \\ \hline
+         Lưu trữ hình ảnh & Firebase Cloud Messaging  & 
+         \url{https://firebase.google.com/docs/storage?hl=en}
+         \\ \hline
+        Gửi thông báo realtime & Firebase Storage  & 
+         \url{https://firebase.google.com/docs/cloud-messaging?hl=vi}
+         \\ \hline
+         Xác thực người dùng & Firebase Authentication  & 
+         \url{https://firebase.google.com/docs/auth?hl=vi}
+         \\ \hline
+         Vẽ biểu đồ UML & Astah UML & 
+         \url{https://astah.net/products/astah-uml}/
+         \\ \hline
+        \end{tabular}
+    \caption{Danh sách thư viện và công cụ sử dụng}
+    \label{tab:my_label}
+\end{table}
+
+\subsection{Kết quả đạt được}
+% Sinh viên trước tiên mô tả kết quả đạt được của mình là gì, ví dụ như các sản phẩm được đóng gói là gì, bao gồm những thành phần nào, ý nghĩa, vai trò?
+
+% Sinh viên cần thống kê các thông tin về ứng dụng của mình như: số dòng code, số lớp, số gói, dung lượng toàn bộ mã nguồn, dung lượng của từng sản phẩm đóng gói, v.v. Tương tự như phần liệt kê về công cụ sử dụng, sinh viên cũng nên dùng bảng để mô tả phần thông tin thống kê này.
+Sau quá trình nghiên cứu và phát triển, ứng dụng đã có thể đáp ứng được những yêu cầu cơ bản mà em đã đưa ra với đầy đủ các chức năng cần thiết dành cho các nhà quản lý khi thực hiện công việc quản lý một câu lạc bộ bóng chày. Với kiến trúc Client-Server, ứng dụng đã được phát triển với hai thành phần riêng biệt là Client và Server, và có thể trao đổi dữ liệu với nhau qua API.
+
+Thống kê các thông tin về ứng dụng
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{4cm}|l|p{7cm}|}
+\hline
+\textbf{Thông tin} & \textbf{Thống kê} & \textbf{Mô tả} \\ \hline
+\textbf{Dung lượng ứng dụng mobile} & 2.02 GB & Trong đó có 2 MB mã nguồn và 2 GB thư viện được cài đặt \\ \hline
+\textbf{Dung lượng ứng dụng phía web backend} & 1.07 MB & Bao gồm toàn bộ mã nguồn \\ \hline
+\textbf{Dung lượng file APK sau khi được đóng gói} & 229 MB & File APK được build bởi Android Studio \\ \hline
+\textbf{Dung lượng ứng dụng phía web frontend} & 316 KB & Bao gồm toàn bộ mã nguồn \\ \hline
+\textbf{Số dòng code web backend} & 4362 & Bao gồm toàn bộ mã nguồn \\ \hline
+\textbf{Số dòng code web frontend} & 5294 & Bao gồm toàn bộ mã nguồn \\ \hline
+\end{tabular}
+\caption{Bảng thống kê các thông tin về ứng dụng}
+\label{tab:appInfo}
+\end{table}
+\newpage
+\subsection{Minh họa các chức năng chính}
+% Sinh viên lựa chọn và đưa ra màn hình cho các chức năng chính, quan trọng, và thú vị nhất. Mỗi giao diện cần phải có lời giải thích ngắn gọn. Khi giải thích, sinh viên có thể kết hợp với các chú thích ở trong hình ảnh giao diện.
+Màn hình thêm bạn bè
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/add_friend.jpg}
+    \captionof{figure}{Màn hình thêm bạn bè}
+    \label{fig:addFriendScreen}
+\end{center}
+\FloatBarrier
+
+Hình \ref{fig:addFriendScreen} hiển thị màn hình thêm bạn bè.Màn hình sẽ hiển thị tổng số người dùng trong hệ thống(mà người đó chưa kết bạn), dưới là danh sách các người dùng đi kèm với nút gửi lời mời kết bạn. Ở phía trên có thanh search để tìm kiếm theo tên hoặc email người muốn kết bạn
+
+Màn hình chấp nhận lời mời tham gia nhóm
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/approve_group_invite_request.jpg}
+    \captionof{figure}{Màn hình chấp nhận lời mời tham gia nhóm}
+    \label{fig:approveGroupRequestScreen}
+\end{center}
+
+Hình \ref{fig:approveGroupRequestScreen} hiển thị màn hình chấp nhận lời mời tham gia nhóm từ bạn bè. Màn hình sẽ hiển thị toàn bộ các lời mời từ bạn bè người đó tham gia nhóm săn sale. Với mỗi lời mời người đó có thể chấp nhận hoặc từ chối lời mời.
+
+Màn hình tạo nhóm săn sale
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/create_sale_group.jpg}
+    \captionof{figure}{Màn hình tạo nhóm săn sale}
+    \label{fig:createSaleGroup}
+\end{center}
+\vspace{-0.5em} % bạn có thể giảm thêm nếu muốn
+Hình \ref{fig:createSaleGroup} hiển thị form để người dùng tạo 1 nhóm săn sale mới. Người dùng cần nhập vào tên nhóm, chọn phạm vi mà khi nhóm hoàn thành thì các sản phẩm trong phạm vi sẽ đc giảm giá, bao gồm các sản phẩm của 1 cửa hàng, 1 thương hiệu hoặc 1 danh mục cụ thể. Ngoài ra người dùng chọn giới hạn số người của nhóm, tùy thuộc vào phạm vi và số lượng khác nhau hệ thống sẽ tự quyết định mức giảm giá ưu đãi mà người dùng sẽ nhận được khi nhóm săn sale tập hợp đủ trước deadline.
+
+Màn hình điểm danh hàng ngày
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/daily_checkin.jpg}
+    \captionof{figure}{Màn hình điểm danh hàng ngày}
+    \label{fig:dailyCheckin}
+\end{center}
+Hình \ref{fig:dailyCheckin} hiển thị màn hình điểm danh hàng ngày. Phía trên hiển thị tên người dùng, điểm thưởng hiện tại, ở dưới có nút để họ có thể checkin mỗi ngày một lần, và bảng theo dõi quá trình điểm danh của mình trong một tuần gần nhất và điểm thưởng nhận đc với chuỗi ngày liên tiếp tương ứng
+
+Màn hình chi tiết nhóm săn sale
+\begin{center}
+    \includegraphics[width=0.55\linewidth]{Hinhve/C4/group_detail.jpg}
+    \captionof{figure}{Màn hình chi tiết nhóm săn sale}
+    \label{fig:groupDetail}
+\end{center}
+Hình \ref{fig:groupDetail} hiển thị màn hình chi tiết nhóm săn sale. Sau khi 1 nhóm săn sale được tạo thành công, màn hình này sẽ hiển thị đồng hồ đếm ngược thời gian còn lại cần phải tập hợp đủ người để kích hoạt nhóm nhận voucher. Ở phía góc phải của thanh appbar có nút điều hướng để có thể gọi đến màn hình mời thêm bạn bè của mình tham gia nhóm cho đủ thành viên. Trung tâm hiển thị các thông tin về nhóm gồm tên, phạm vi áp dụng, mức giảm giá, số thành viên hiện tại trên tổng thành viên tối thiểu cần đạt, thời gian tạo, trạng thái nhóm, thanh tiến trình và tên các thành viên đã tham gia.
+
+Màn hình mời bạn bè tham gia nhóm săn sale
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/invite_friend_to_sale_group.jpg}
+    \captionof{figure}{Màn hình mời bạn bè tham gia nhóm săn sale}
+    \label{fig:inviteFriend}
+\end{center}
+Hình \ref{fig:inviteFriend} hiển thị màn hình mời bạn bè tham gia nhóm. Nó hiển thị danh sách bạn bè của người dùng hiện tại kèm nút invite để có thể mời 1 hoặc nhiều người bạn vào nhóm săn sale của mình
+
+Màn hình nhiệm vụ chi tiết
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/mission_detail.jpg}
+    \captionof{figure}{Màn hình nhiệm vụ chi tiết}
+    \label{fig:missionDetail}
+\end{center}
+Hình \ref{fig:missionDetail} hiển thị màn hình nhiệm vụ chi tiết. Khi bấm vào 1 nhiệm vụ cụ thể sẽ điều hướng đến màn hình này. Màn hình hiển thị ảnh, tên nhiệm vụ, mô tả cụ thể về nhiệm vụ, mức điểm thưởng sẽ nhận đc khi hoàn thành kèm thời hạn cần hoàn thành. Ở trung tâm là thanh trạng thái thể hiện tiến độ hoàn thành hiện tại và trạng thái của nhiệm vụ.
+
+Màn hình đơn hàng của tôi
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/my_order.jpg}
+    \captionof{figure}{Màn hình đơn hàng của tôi}
+    \label{fig:myOrder}
+\end{center}
+Hình \ref{fig:myOrder} hiển thị màn hình đơn hàng của tôi. Màn hình này lưu lại lịch sử các đơn hàng mà người dùng đó đã mua, gồm mã đơn hàng, trạng thái, thời gian giao hàng, các sản phẩm đã mua trong đơn, tổng giá trị đơn trước và sau khi áp dụng các voucher. Ngoài ra ở mỗi đơn hàng có nút mua lại để thêm nhanh vào giỏ hàng và nút viết bình luận cho các sản phẩm đã mua
+
+Màn hình thông báo
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/notification.jpg}
+    \captionof{figure}{Màn hình thông báo}
+    \label{fig:notification}
+\end{center}
+Hình \ref{fig:notification} hiển thị màn hình thông báo. Màn hình này được điều hướng từ biểu tượng thông báo ở bottom nav bar, hiển thị tổng số thông báo chưa đọc. Ở màn hình này, hiển thị toàn bộ các thông báo được hệ thống gửi, gồm tiêu đề, nội dung, thời gian gửi và trạng thái đọc hay chưa đọc của người dùng
+
+Màn hình sản phẩm chi tiết
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/product_detail.jpg}
+    \captionof{figure}{Màn hình sản phẩm chi tiết}
+    \label{fig:productDetail}
+\end{center}
+Hình \ref{fig:productDetail} hiển thị màn hình sản phẩm chi tiết. Màn hình này hiển thị tên sản phẩm, các ảnh liên quan đến sản phẩm, có thể phóng to xem từng ảnh, số điểm đánh giá trung bình của người dùng, giá, thương hiệu, mô tả, chi tiết sản phẩm, tổng số bình luận vê sản phẩm đó. Ngoài ra màn hình có các nút để điều hướng đến giỏ hàng, điều hướng đến màn hình xem chi tiết các review, màn hình viết bình luận mới, nút chọn số lượng muốn mua và thêm vào giỏ hàng
+
+Màn hình xem bình luận
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/reviews.jpg}
+    \captionof{figure}{Màn hình xem bình luận}
+    \label{fig:reviewScreen}
+\end{center}
+Hình \ref{fig:reviewScreen} hiển thị màn hình xem bình luận. Màn hình này có chia ra các tab, lọc các bình luận theo các mục: xem tất cả, xem các bình luận có ảnh/video, và lọc theo các đánh giá từ 1 đến 5 sao. Với mỗi tab, giao diện sẽ hiển thị điểm trung bình, tổng bình luận, và chi tiết mỗi bình luận gồm người đăng, điểm, thời gian, bình luận, ảnh hoặc video đính kèm.
+
+Màn hình gợi ý sản phẩm 
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/suggest.jpg}
+    \captionof{figure}{Màn hình gợi ý sản phẩm}
+    \label{fig:suggestScreen}
+\end{center}
+Hình \ref{fig:suggestScreen} hiển thị màn hình gợi ý sản phẩm. Phần gợi ý sản phẩm sẽ nằm ở chính giữa của màn hình home, dưới dạng slidebar sẽ tự động trượt ngang từ trái qua phải, hiển thị thông tin các sản phẩm được gợi ý từ hệ thống gợi ý dùng học máy được cá nhân hóa dành riêng cho mỗi người dùng. Bên cạnh có nút viewall để xem toàn bộ các sản phẩm được gợi ý riêng cho người dùng.
+
+Màn hình danh sách sản phẩm 
+\begin{center}
+    \includegraphics[width=0.6\linewidth]{Hinhve/C4/view_product.jpg}
+    \captionof{figure}{Màn hình danh sách sản phẩm }
+    \label{fig:viewProductScreen}
+\end{center}
+Hình \ref{fig:viewProductScreen} hiển thị màn hình danh sách sản phẩm . Ở phía trên có bộ lọc để sắp xếp sản phẩm theo thứ tự alphabet hoặc giá giảm dần, phía dưới hiển thị danh sách sản phẩm dạng lưới mỗi hàng 2 sản phẩm, cứ mỗi 20 sản phẩm ở cuối trang sẽ có nút loadmore để người dùng lựa chọn có xem thêm các sản phẩm hay không.
+
+\section{Kiểm thử}
+% Phần này có độ dài từ hai đến ba trang. Sinh viên thiết kế các trường hợp kiểm thử cho hai đến ba chức năng quan trọng nhất. Sinh viên cần chỉ rõ các kỹ thuật kiểm thử đã sử dụng. Chi tiết các trường hợp kiểm thử khác, nếu muốn trình bày, sinh viên đưa vào phần phụ lục.
+% Sinh viên sau cùng tổng kết về số lượng các trường hợp kiểm thử và kết quả kiểm thử. Sinh viên cần phân tích lý do nếu kết quả kiểm thử không đạt.
+\subsection{Kiểm thử tương thích}
+Để tiến hành kiểm thử độ tương thích của ứng dụng trên các thiết bị khác nhau, em đã tiến hành cài đặt ứng dụng trên ba thiết bị là Redmi Note 12 Pro, Samsung S20 FE và Iphone11. Trong đó, Redmi Note 12 Pro là thiết bị cá nhân của em, còn Samsung S20 FE và Iphone11 em deploy file apk lên firebase và chia sẻ để bạn bè dùng thử và trải nghiệm. Kết quả thu được được em trình bày trong bảng \ref{tab:deviceFit}
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|l|}
+\hline
+\multicolumn{1}{|c|}{\textbf{Thiết bị}} &
+  \multicolumn{1}{c|}{\textbf{Thông số kỹ thuật}} &
+  \multicolumn{1}{c|}{\textbf{Giao diện}} &
+  \multicolumn{1}{c|}{\textbf{Chức năng}} \\ \hline
+\textbf{\begin{tabular}[c]{@{}l@{}}Redmi Note 12 \\ Pro\end{tabular}} &
+  \begin{tabular}[c]{@{}l@{}}Màn hình: 6.67"\\ Hệ điều hành: Android 13\end{tabular} &
+  \textbf{Đạt} &
+  \textbf{Đạt} \\ \hline
+\textbf{Samsung S20 FE} &
+  \begin{tabular}[c]{@{}l@{}}Màn hình: 6.5"\\ Hệ điều hành: Android 13\end{tabular} &
+  \textbf{Đạt} &
+  \textbf{Đạt} \\ \hline
+\textbf{\begin{tabular}[c]{@{}l@{}}Iphone11\end{tabular}} &
+  \begin{tabular}[c]{@{}l@{}}Màn hình: 6.1"\\ Hệ điều hành: IOS 17\end{tabular} &
+  \begin{tabular}[c]{@{}l@{}}\textbf{Đạt}\end{tabular} &
+  \textbf{Đạt} \\ \hline
+\end{tabular}
+\caption{Bảng kiểm thử sự tương thích của phần mềm trên các loại thiết bị}
+\label{tab:deviceFit}
+\end{table}
+\subsection{Kiểm thử hộp đen}
+\subsubsection{Kiểm thử nhóm chức năng Đơn hàng của tôi}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|X|X|X|>{\centering\arraybackslash}m{2cm}|}
+\hline
+\textbf{Chức năng} & \textbf{Giá trị đầu vào} & \textbf{Đầu ra cần đạt} & \textbf{Kết quả} \\ \hline
+Xem thông tin đơn hàng & Chọn đơn hàng cần xem thông tin & Hiển thị chi tiết thông tin về đơn hàng đó & Đạt \\ \hline
+Mua lại đơn hàng & Chọn nút mua lại & Các sản phẩm trong đơn hàng được tự động thêm lại vào giỏ hàng & Đạt \\ \hline
+Viết bình luận về sản phẩm đã mua & Chọn nút viết bình luận của sản phẩm trong các sản phẩm của đơn hàng & Điều hướng đến màn hình viết bình luận với đầy đủ thông tin về sản phẩm vừa chọn & Đạt \\ \hline
+\end{tabularx}
+\caption{Bảng kiểm thử nhóm chức năng Đơn hàng của tôi}
+\label{tab:myOrderTest}
+\end{table}
+\FloatBarrier
+\subsubsection{Kiểm thử nhóm chức năng Nhóm săn sale}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{|p{2.8cm}|p{3.2cm}|p{6.3cm}|>{\centering\arraybackslash}p{1.3cm}|}
+\hline
+\textbf{Chức năng} & \textbf{Giá trị đầu vào} & \textbf{Đầu ra cần đạt} & \textbf{Kết quả} \\ \hline
+Tạo nhóm săn sale mới & Các thông tin cần thiết để tạo 1 nhóm săn sale & Hiển thị thông báo tạo nhóm thành công và có 1 nhóm mới xuất hiện trong màn hình danh sách nhóm & Đạt \\ \hline
+Xem danh sách nhóm & Vào phần Profile và My Sale Group & Hiển thị màn hình các nhóm đã tạo, thông tin tóm tắt & Đạt \\ \hline
+Mời bạn bè vào nhóm & Chọn nút mời bạn bè trong thanh điều hướng ở appbar & Điều hướng đến màn hình mời bạn bè, hiển thị danh sách bạn bè muốn mời, sau khi ấn gửi thì có thông báo thành công ở cả người gửi và người nhận, đồng thời ở danh sách lời mời phía người nhận có 1 lời mời mới xuất hiện & Đạt \\ \hline
+Phê duyệt lời mời tham gia nhóm & Chọn nút điều hướng đến màn hình danh sách lời mời từ thanh điều hướng trên appbar của màn hình danh sách nhóm & Hiển thị các lời mời từ bạn bè, khi ấn đồng ý thì có thông báo gửi cho cả hai, bản thân được thêm vào nhóm săn sale của bạn tạo, và số lượng cùng trạng thái của nhóm được cập nhật; còn nếu chọn từ chối thì chỉ gửi thông báo & Đạt \\ \hline
+\end{tabular}
+\caption{Bảng kiểm thử nhóm chức năng Nhóm săn sale}
+\label{tab:saleGroupTest}
+\end{table}
+
+
+\subsubsection{Kiểm thử nhóm chức năng voucher của tôi}
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{|p{3cm}|p{3.5cm}|p{6.5cm}|>{\centering\arraybackslash}p{1.5cm}|}
+\caption{Bảng kiểm thử nhóm chức năng voucher của tôi} \label{tab:myVoucherTest} \\
+\hline
+\textbf{Chức năng} & \textbf{Giá trị đầu vào} & \textbf{Đầu ra cần đạt} & \textbf{Kết quả} \\ \hline
+\endfirsthead
+% KHÔNG lập lại tiêu đề bảng ở trang sau
+\endhead
+\hline
+Xem lịch sử voucher & Chọn nút xem lịch sử trên thanh điều hướng của appbar & Hiển thị màn hình lịch sử gồm các tab: đã thu thập, đã sử dụng và đã hết hạn, giao diện mỗi tab tương tự màn hình xem voucher & Đạt \\ \hline
+Xem danh sách voucher & Vào phần Profile và My Voucher & Hiển thị thông tin các voucher trong hệ thống, có thể tìm kiếm lọc các voucher theo type & Đạt \\ \hline
+Thu thập voucher & Chọn nút thu thập ở một thẻ voucher cụ thể & Tự động thêm voucher vào danh sách các voucher đã thu thập, có thể xem trong phần lịch sử cũng như phần checkout khi chuẩn bị thanh toán & Đạt \\ \hline
+Áp dụng voucher & Chọn nút áp dụng voucher khi chuẩn bị thanh toán đơn hàng & Hiển thị danh sách các voucher đã thu thập và thỏa mãn các điều kiện được áp dụng của đơn hàng, khi chọn 1 voucher cụ thể để áp dụng thì sẽ tự động giảm giá cho đơn hàng và hiển thị thông tin voucher vừa áp dụng lên giao diện & Đạt \\ \hline
+Quy đổi voucher & Chọn nút đổi thưởng ở trên thanh điều hướng của màn hình voucher & Hiển thị điểm số hiện tại, danh sách các voucher người dùng có thể dùng điểm quy đổi, khi chọn nút quy đổi 1 voucher thì điểm tự động bị trừ và voucher đó tự động được thêm vào list voucher đã nhận & Đạt \\ \hline
+\end{longtable}
+
+% \section{Triển khai}
+% Sinh viên trình bày mô hình và/hoặc cách thức triển khai thử nghiệm/thực tế. Ứng dụng của sinh viên được triển khai trên server/thiết bị gì, cấu hình như thế nào. Kết quả triển khai thử nghiệm nếu có (số lượng người dùng, số lượng truy cập, thời gian phản hồi, phản hồi người dùng, khả năng chịu tải, các thống kê, v.v.)
+Vậy là trong chương 4, em đã trình bày về phần thiết kế, triển khai và đánh giá hệ thống. Tiếp đến, em sẽ trình bày nội dung của Chương  5 - Các giải pháp và đóng góp nổi bật.
+
+\end{document}

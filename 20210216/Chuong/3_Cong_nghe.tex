@@ -1,0 +1,199 @@
+\documentclass[../DoAn.tex]{subfiles}
+\setcounter{secnumdepth}{4}
+\begin{document}
+
+% Chương này có độ dài không quá 10 trang. Nếu cần trình bày dài hơn, sinh viên đưa vào phần phụ lục. Chú ý đây là kiến thức đã có sẵn; SV sau khi tìm hiểu được thì phân tích và tóm tắt lại. Sinh viên không trình bày dài dòng, chi tiết. 
+
+% Với đồ án ứng dụng, sinh viên để tên chương là “Công nghệ sử dụng”. Trong chương này, sinh viên giới thiệu về các công nghệ, nền tảng sử dụng trong đồ án. Sinh viên cũng có thể trình bày thêm nền tảng lý thuyết nào đó nếu cần dùng tới.
+
+% Với đồ án nghiên cứu, sinh viên đổi tên chương thành “Cơ sở lý thuyết”. Khi đó, nội dung cần trình bày bao gồm: Kiến thức nền tảng, cơ sở lý thuyết, các thuật toán, phương pháp nghiên cứu, v.v.
+
+% Với từng công nghệ/nền tảng/lý thuyết được trình bày, sinh viên phải phân tích rõ công nghệ/nền tảng/lý thuyết đó dùng để để giải quyết vấn đề/yêu cầu cụ thể nào ở Chương 2. Hơn nữa, với từng vấn đề/yêu cầu, sinh viên phải liệt kê danh sách các công nghệ/hướng tiếp cận tương tự có thể dùng làm lựa chọn thay thế, rồi giải thích rõ sự lựa chọn của mình.
+
+% Lưu ý: Nội dung ĐATN phải có tính chất liên kết, liền mạch, và nhất quán. Vì vậy, các công nghệ/thuật toán trình bày trong chương này phải khớp với nội dung giới thiệu của sinh viên ở phần trước đó. 
+
+% Trong chương này, để tăng tính khoa học và độ tin cậy, sinh viên nên chỉ rõ nguồn kiến thức mình thu thập được ở tài liệu nào, đồng thời đưa tài liệu đó vào trong danh sách tài liệu tham khảo rồi tạo các tham chiếu chéo (xem hướng dẫn ở phụ lục A.7).
+Ứng dụng được chia thành hai thành phần riêng biệt là app mobile dành cho người dùng và web admin dành cho quản trị viên nên mỗi thành phần sẽ sử dụng các công nghệ khác nhau để thực hiện các nhiệm vụ. Về phần Mobile, các công nghệ chính được sử dụng là Flutter\cite{Flutter}, Dart\cite{Dart} và Firebase\cite{Firebase}. Về phía server, các công nghệ chính được sử dụng là Spring boot Framework\cite{SBF} và ReactJS\cite{ReactJS}. 
+
+\section{Các công nghệ sử dụng bên phía mobile}
+\subsection{Flutter\cite{Flutter}}
+Flutter là một framework mã nguồn mở được phát triển bởi Google, cho phép lập trình viên xây dựng các ứng dụng đa nền tảng (cross-platform) từ một cơ sở mã (codebase) duy nhất. Flutter sử dụng ngôn ngữ Dart làm ngôn ngữ lập trình chính và cung cấp một bộ widget được xây dựng sẵn, tối ưu hóa cho hiệu suất và khả năng tùy biến cao. Ứng dụng được viết bằng Flutter có thể được biên dịch trực tiếp thành mã gốc (native code) cho Android, iOS, Web, Desktop mà không cần cầu nối (bridge) như các công nghệ hybrid khác như React Native hay Cordova.
+
+Trong đồ án, em sử dụng Flutter để xây dựng toàn bộ giao diện và logic phía client của ứng dụng. Mục tiêu của việc sử dụng Flutter là nhằm đáp ứng các yêu cầu về hiệu suất, khả năng mở rộng và trải nghiệm người dùng nhất quán trên nhiều nền tảng.
+
+Các ưu điểm nổi bật của Flutter:
+\begin{itemize} 
+\item \textbf{Hiệu suất cao} : Flutter sử dụng công cụ đồ họa Skia để vẽ giao diện trực tiếp lên canvas, bỏ qua lớp trung gian như WebView hay Native Components. Do đó, tốc độ phản hồi và hiệu suất của ứng dụng rất cao, tương đương với ứng dụng native truyền thống.
+\item \textbf{Một codebase cho nhiều nền tảng}: Nhờ khả năng biên dịch sang mã native và hỗ trợ Android, iOS, web, desktop, lập trình viên chỉ cần viết mã một lần nhưng có thể triển khai trên nhiều nền tảng, giúp tiết kiệm thời gian phát triển và dễ bảo trì.
+\item  \textbf{Hot Reload}: Flutter hỗ trợ tính năng Hot Reload, cho phép lập trình viên có thể cập nhật thay đổi trong code và xem kết quả ngay lập tức mà không cần biên dịch lại toàn bộ ứng dụng.
+\item \textbf{UI tùy biến mạnh mẽ}: Flutter cung cấp một bộ widget phong phú, đồng thời hỗ trợ tạo các widget tùy chỉnh dễ dàng, đáp ứng mọi yêu cầu thiết kế hiện đại như Material Design hay Cupertino.
+\item \textbf{Cộng đồng lớn và tài liệu đầy đủ}: Flutter có một cộng đồng phát triển sôi động, với nhiều thư viện mã nguồn mở hỗ trợ từ UI đến logic và API. Tài liệu chính thức từ Google được cập nhật liên tục, dễ tiếp cận cho người mới.
+\end{itemize}
+
+
+Lý do lựa chọn Flutter: So với các lựa chọn khác như React Native, Xamarin hay Kotlin Multiplatform, Flutter có lợi thế về hiệu suất do không sử dụng cầu nối JavaScript và có khả năng tùy biến UI sâu. Với yêu cầu của đồ án là xây dựng một ứng dụng có giao diện phong phú, tương tác cao, hiệu suất mượt mà và có thể triển khai trên nhiều nền tảng, Flutter là sự lựa chọn tối ưu hơn cả.
+
+\subsection{Dart\cite{Dart}}
+Dart là ngôn ngữ lập trình do Google phát triển và được sử dụng làm ngôn ngữ chính cho Flutter. Dart là ngôn ngữ hướng đối tượng, có cú pháp tương tự như Java và JavaScript, hỗ trợ lập trình bất đồng bộ hiệu quả với các từ khóa async, await và Future.
+Trong dự án, Dart đóng vai trò trung tâm để xây dựng toàn bộ logic nghiệp vụ và giao tiếp dữ liệu với các dịch vụ backend. Tất cả các lớp liên quan đến hiển thị UI, quản lý trạng thái, xử lý logic, gọi API, lưu trữ tạm thời... đều được hiện thực bằng Dart.
+
+Đặc điểm nổi bật của Dart:
+\begin{itemize} 
+\item \textbf{Hỗ trợ lập trình bất đồng bộ mạnh mẽ}: Dart được thiết kế để tối ưu hóa cho các ứng dụng giao diện người dùng, nên có cơ chế xử lý bất đồng bộ rất hiệu quả, giúp ứng dụng luôn mượt mà trong quá trình tải dữ liệu từ mạng hoặc thực hiện tác vụ IO.
+\item \textbf{Ngôn ngữ đa năng}: Dart có thể chạy dưới dạng biên dịch AOT (Ahead-of-Time) để tạo mã native cho ứng dụng release, hoặc JIT (Just-In-Time) cho quá trình phát triển với Hot Reload. Điều này giúp cân bằng giữa hiệu suất và tốc độ phát triển.
+\item \textbf{Cú pháp dễ tiếp cận}: Với cú pháp tương tự JavaScript/Java và hỗ trợ tính năng hiện đại như null safety, Dart rất dễ tiếp cận đối với lập trình viên đã quen thuộc với các ngôn ngữ lập trình phổ biến.
+\item \textbf{Tích hợp sâu với Flutter}: Dart được thiết kế đi kèm với Flutter nên có khả năng tương thích tuyệt đối và tận dụng toàn bộ sức mạnh của framework, đặc biệt là trong việc quản lý widget và trạng thái.
+
+\end{itemize}
+So với JavaScript (React Native) hay Xamarin, Dart là ngôn ngữ hiện đại hơn, được thiết kế dành riêng cho xây dựng UI đa nền tảng, đồng thời có hiệu suất tốt hơn trong môi trường mobile nhờ khả năng biên dịch thành mã native thực sự. Vì thế, Dart là lựa chọn tất yếu khi sử dụng Flutter.
+\subsection{Firebase\cite{Firebase}}
+Firebase là một nền tảng phát triển ứng dụng di động và web được cung cấp bởi Google. Firebase cung cấp nhiều dịch vụ backend như xác thực người dùng, cơ sở dữ liệu thời gian thực, lưu trữ file, thông báo đẩy, phân phối ứng dụng, v.v... giúp giảm tải công việc phát triển và quản lý backend cho lập trình viên, đặc biệt phù hợp với các ứng dụng nhỏ đến trung bình hoặc MVP (Minimum Viable Product).
+
+Trong đồ án, em sử dụng Firebase làm nền tảng backend chính để hỗ trợ lưu trữ dữ liệu người dùng, xác thực tài khoản, gửi thông báo, và phân phối bản beta ứng dụng. Các dịch vụ Firebase được sử dụng bao gồm:
+\subsubsection{Firebase Authentication}
+Được sử dụng để xác thực người dùng trong ứng dụng. Firebase Authentication hỗ trợ nhiều hình thức đăng nhập như email/password, Google, Facebook, Apple, v.v. Em sử dụng xác thực bằng email/password và Google nhằm đơn giản hóa quá trình đăng ký và đăng nhập người dùng, đồng thời dễ tích hợp trong giao diện Flutter.
+
+Ưu điểm:
+\begin{itemize}
+\item  Dễ tích hợp với Flutter qua thư viện firebase auth
+\item Bảo mật cao, quản lý người dùng qua Firebase Console.
+\item Tự động xử lý email xác nhận, reset mật khẩu
+\end{itemize}
+
+\subsubsection{Cloud Firestore}
+Đây là hệ quản trị cơ sở dữ liệu NoSQL thời gian thực do Firebase cung cấp. Firestore cho phép lưu trữ dữ liệu dạng document/collection với khả năng đồng bộ hóa giữa client và server theo thời gian thực. Trong đồ án, em dùng Firestore để lưu các dữ liệu liên quan đến người dùng như thông tin cá nhân, các lượt truy cập, thông tin đơn hàng, sản phẩm với nhiều trường phức tạp.
+
+Ưu điểm:
+\begin{itemize}
+\item Hỗ trợ đọc/ghi theo thời gian thực.
+\item Có thể truy vấn dữ liệu phức tạp theo nhiều điều kiện.
+\item Tự động scale khi số lượng người dùng tăng.
+\end{itemize}
+
+\subsubsection{Firebase Storage}
+Được sử dụng để lưu trữ các tệp tin như ảnh đại diện, ảnh sản phẩm, ảnh và video bình luận mà người dùng upload. Firebase Storage hoạt động dựa trên Google Cloud Storage, hỗ trợ upload/download hình ảnh,  với độ bảo mật cao.
+
+Ưu điểm:
+\begin{itemize}
+\item Cho phép lưu trữ hình ảnh, video với số lượng và dung lượng lớn .
+\item Lưu trữ file lâu dài, được truy cập qua URL bảo mật.
+\end{itemize}
+
+\subsubsection{Firebase App Distribution}
+Firebase App Distribution giúp phân phối phiên bản beta của ứng dụng đến người kiểm thử (tester) trước khi phát hành chính thức trên Play Store hoặc App Store. Trong dự án, em sử dụng App Distribution để gửi các bản build thử nghiệm đến nhóm bạn kiểm thử giao diện và tính năng.
+
+Ưu điểm:
+\begin{itemize}
+\item Phân phối nhanh chóng không cần qua Store.
+\item Quản lý dễ dàng danh sách người kiểm thử.
+\item Tự động gửi email thông báo phiên bản mới.
+\end{itemize}
+
+\subsubsection{Firebase Cloud Messaging (FCM)}
+Đây là dịch vụ gửi thông báo đẩy (push notification) miễn phí. Trong đồ án, FCM được dùng để gửi thông báo đến người dùng khi có sự kiện quan trọng như thông tin đơn hàng, khuyến mại, voucher, tích đổi điểm thưởng, hoàn thành nhiệm vụ...
+
+Ưu điểm:
+\begin{itemize}
+\item Cho phép gửi thông báo theo nhóm người dùng hoặc cá nhân.
+\item Có thể kết hợp logic phía server để tùy chỉnh nội dung gửi.
+\item Tăng tương tác với người dùng.
+\end{itemize}
+
+Lý do lựa chọn Firebase: so với các giải pháp backend như AWS Amplify, Supabase, hay tự triển khai server riêng, Firebase nổi bật nhờ:
+\begin{itemize}
+\item Tích hợp chặt chẽ với Flutter (có sẵn các thư viện).
+\item Miễn phí ở mức sử dụng cơ bản, phù hợp với dự án cá nhân.
+\item Không cần thiết lập server hay quản lý hạ tầng.
+\item Đáp ứng đầy đủ các chức năng backend cho ứng dụng di động.
+\end{itemize}
+
+Firebase giúp em tập trung vào phát triển tính năng và trải nghiệm người dùng mà không cần lo lắng về vấn đề triển khai hệ thống backend phức tạp.
+
+\section{Các công nghệ sử dụng bên phía server}
+
+\subsection{ReactJS\cite{ReactJS}}
+ReactJS là một thư viện JavaScript mã nguồn mở được phát triển bởi Facebook, chuyên dùng để xây dựng giao diện người dùng (UI), đặc biệt là cho các ứng dụng đơn trang (Single Page Applications - SPA). React cho phép xây dựng UI bằng cách chia nhỏ giao diện thành các thành phần (components) độc lập, tái sử dụng được.
+
+Những đặc điểm nổi bật của ReactJS:
+\begin{itemize}
+    \item \textbf{Virtual DOM}: React sử dụng Virtual DOM để tối ưu hóa hiệu suất. Khi dữ liệu thay đổi, React sẽ tính toán sự khác biệt giữa DOM hiện tại và DOM mới, sau đó chỉ cập nhật những phần thực sự thay đổi trên giao diện.
+    \item \textbf{Component-Based Architecture}: Kiến trúc dựa trên component giúp tách biệt các phần giao diện, tăng khả năng tái sử dụng, dễ kiểm thử và dễ bảo trì mã nguồn.
+    \item \textbf{JSX}: React sử dụng JSX (JavaScript XML) – một cú pháp mở rộng của JavaScript, cho phép viết mã giống HTML trong các file JavaScript, giúp việc viết và hiểu giao diện dễ dàng hơn.
+    \item \textbf{Hệ sinh thái mạnh mẽ}: React có cộng đồng lớn, tài liệu đầy đủ và nhiều thư viện hỗ trợ (React Router, Redux, v.v.), giúp dễ dàng mở rộng và xây dựng các ứng dụng phức tạp.
+\end{itemize}
+
+Trong đồ án, em sử dụng ReactJS để xây dựng giao diện cho web Admin. React giúp giao diện hoạt động mượt mà, phản hồi nhanh với trải nghiệm người dùng tốt nhờ kiến trúc component hóa và khả năng cập nhật DOM hiệu quả.
+
+\subsection{Spring Boot Framework\cite{SpringBoot}}
+Spring Boot là một framework mã nguồn mở được xây dựng dựa trên nền tảng Spring Framework – một trong những nền tảng phổ biến nhất trong phát triển ứng dụng Java. Spring Boot giúp đơn giản hóa quá trình cấu hình và triển khai ứng dụng Java, đặc biệt là các ứng dụng web và microservices.
+
+Một số đặc điểm nổi bật của Spring Boot:
+\begin{itemize}
+    \item \textbf{Cấu hình tối thiểu}: Spring Boot giúp loại bỏ phần lớn cấu hình rườm rà bằng cách sử dụng các cấu hình mặc định hợp lý, giúp nhà phát triển bắt đầu nhanh chóng.
+    \item \textbf{Tích hợp mạnh mẽ}: Tích hợp sẵn với các công nghệ như JPA/Hibernate, Spring Security, Spring Data, REST API, v.v., giúp dễ dàng xây dựng các ứng dụng backend mạnh mẽ.
+    \item \textbf{Đóng gói ứng dụng dễ dàng}: Spring Boot cho phép đóng gói ứng dụng dưới dạng file JAR hoặc WAR, có thể chạy độc lập mà không cần cài đặt thêm máy chủ.
+    \item \textbf{Quản lý phụ thuộc linh hoạt}: Sử dụng Maven hoặc Gradle để quản lý thư viện một cách hiệu quả.
+    \item \textbf{Kiến trúc RESTful}: Hỗ trợ xây dựng RESTful API dễ dàng nhờ các annotation như @RestController, @GetMapping, @PostMapping,...
+\end{itemize}
+
+Trong đồ án, em sử dụng Spring Boot để xây dựng backend server web admin, xử lý các yêu cầu từ client (ReactJS), thao tác với cơ sở dữ liệu, và cung cấp các RESTful API. Spring Boot đảm bảo hệ thống có khả năng mở rộng, bảo mật và dễ bảo trì.
+
+\section{Các công nghệ sử dụng để phát triển tính năng gợi ý}
+
+\subsection{Python\cite{Python}}
+Python là một ngôn ngữ lập trình bậc cao, mạnh mẽ và dễ đọc, được sử dụng phổ biến trong các lĩnh vực như khoa học dữ liệu, trí tuệ nhân tạo và học máy. Với thư viện phong phú, cộng đồng lớn và khả năng viết mã ngắn gọn, Python rất phù hợp để phát triển các mô hình gợi ý dựa trên thuật toán học máy.
+
+Trong đồ án, em sử dụng Python để xây dựng mô hình gợi ý. Các thư viện được sử dụng bao gồm:
+\begin{itemize}
+    \item \textbf{Pandas, NumPy}: Dùng để xử lý dữ liệu người dùng, lịch sử tương tác.
+    \item \textbf{LightFM}: Một thư viện mã nguồn mở được phát triển cho bài toán hệ thống gợi ý, hỗ trợ cả hai phương pháp: collaborative filtering và content-based.
+    \item \textbf{Scikit-learn}: Hỗ trợ chuẩn hóa dữ liệu và đo lường độ chính xác của mô hình.
+\end{itemize}
+Python giúp quá trình xử lý dữ liệu và huấn luyện mô hình diễn ra linh hoạt, nhanh chóng và dễ triển khai.
+
+\subsection{LightFM\cite{LightFM}}
+LightFM là một thư viện Python dùng để xây dựng hệ thống gợi ý kết hợp (hybrid recommender system), hỗ trợ cả collaborative filtering và content-based filtering. Nó được tối ưu hóa cho dữ liệu thưa (sparse data) và phù hợp với các hệ thống có lượng lớn người dùng và item nhưng ít tương tác.
+
+Các lý do em lựa chọn LightFM trong đồ án:
+\begin{itemize}
+    \item Hỗ trợ gợi ý cá nhân hóa cho từng người dùng dựa trên lịch sử tương tác và đặc trưng nội dung.
+    \item Có thể điều chỉnh dễ dàng giữa các mô hình latent factor và mô hình sử dụng metadata.
+    \item Cho phép huấn luyện nhanh và hiệu quả trên dữ liệu lớn, phù hợp cho môi trường thực tế.
+\end{itemize}
+
+Sau khi huấn luyện mô hình LightFM bằng Python, em đã lưu lại mô hình và danh sách gợi ý để triển khai phía server.
+
+\subsection{NodeJS\cite{NodeJS}}
+NodeJS là một nền tảng chạy JavaScript phía server, được xây dựng trên engine V8. Với khả năng xử lý bất đồng bộ mạnh mẽ và tốc độ cao, NodeJS là lựa chọn phù hợp để xây dựng các API phục vụ cho mobile app.
+
+Trong đồ án, em sử dụng NodeJS để:
+\begin{itemize}
+    \item Triển khai API RESTful để mobile app có thể gọi và lấy danh sách gợi ý từ mô hình.
+    \item Kết nối tới dữ liệu được xử lý từ Python thông qua file
+    \item Đảm bảo khả năng mở rộng và phản hồi nhanh nhờ kiến trúc event-driven.
+\end{itemize}
+
+NodeJS giúp việc tích hợp giữa backend (API) và mobile app diễn ra hiệu quả và đồng bộ với toàn hệ thống.
+
+\subsection{Kaggle IDE\cite{Kaggle}}
+Kaggle là một nền tảng nổi tiếng cho khoa học dữ liệu và học máy, cung cấp môi trường lập trình trực tuyến (Kaggle Notebooks) với tài nguyên sẵn có như GPU, thư viện học máy và quyền truy cập trực tiếp đến tập dữ liệu.
+
+Trong đồ án, em sử dụng Kaggle để:
+\begin{itemize}
+    \item Phát triển, thử nghiệm và huấn luyện mô hình LightFM trong môi trường trực tuyến.
+    \item Tận dụng các gói thư viện được cài đặt sẵn và tài nguyên xử lý mạnh như GPU để tăng tốc quá trình huấn luyện.
+    \item Xuất kết quả (danh sách gợi ý hoặc model đã huấn luyện) để sử dụng cho backend NodeJS.
+\end{itemize}
+\section{Công nghệ sử dụng để xây dựng chatbot}
+RASA \cite{RasaFramework} là một nền tảng mã nguồn mở chuyên dùng để xây dựng chatbot có khả năng hội thoại tự nhiên. Với nhiều công cụ hỗ trợ mạnh mẽ, Rasa giúp lập trình viên phát triển các hệ thống hội thoại thông minh, phù hợp với nhiều lĩnh vực như tự động hóa chăm sóc khách hàng, hỗ trợ tư vấn bán hàng, và các ứng dụng tương tác khác.
+
+Rasa nổi bật nhờ khả năng xử lý ngôn ngữ tự nhiên hiệu quả, khả năng tùy biến cao, dễ tích hợp với nhiều dịch vụ và nền tảng như Facebook Messenger, Slack, Telegram, các hệ thống CRM hoặc API của các nền tảng web. Điểm mạnh của framework này là hoàn toàn miễn phí và được cộng đồng sử dụng rộng rãi.
+
+Kiến trúc chính của Rasa bao gồm hai thành phần: Rasa NLU và Rasa Core. Trong đó, Rasa NLU đảm nhiệm vai trò phân tích ngôn ngữ đầu vào, giúp nhận biết ý định của người dùng và trích xuất các thông tin quan trọng (thực thể) từ văn bản. Nhờ đó, chatbot có thể hiểu rõ hơn nội dung và ngữ cảnh của cuộc trò chuyện, từ đó đưa ra phản hồi chính xác hơn.
+
+Trong khi đó, Rasa Core đóng vai trò điều phối cuộc hội thoại. Thành phần này sử dụng các thuật toán học máy để xác định hành động tiếp theo dựa trên lịch sử tương tác và ngữ cảnh hiện tại. Điều này giúp chatbot có thể duy trì cuộc đối thoại một cách tự nhiên và linh hoạt hơn, xử lý được nhiều tình huống phức tạp.
+
+Nhờ tính linh hoạt cao, dễ tiếp cận và khả năng hoạt động hiệu quả ngay cả với tập dữ liệu huấn luyện nhỏ, em đã lựa chọn sử dụng RASA làm framework chính để xây dựng chức năng chatbot cho hệ thống của mình.
+
+Vậy là trong chương 3, em đã trình bày một số công nghệ được sử dụng trong ứng dụng và lý do vì sao sử dụng chúng. Sau đây, em sẽ trình bày nội dung của Chương 4 - Thiết kế, triển khai và đánh giá hệ thống.
+\end{document}

@@ -1,0 +1,105 @@
+\documentclass[../DoAn.tex]{subfiles}
+
+\begin{document}
+
+% Lưu ý: \textbf{Trước khi viết ĐATN, sinh viên cần đọc kỹ hướng dẫn và quy định chi tiết} về cách viết ĐATN trong Phụ lục A. Sinh viên tuân theo mẫu tài liệu này để viết báo cáo đồ án tốt nghiệp, vì tài liệu này đã được căn chỉnh, chỉnh sửa theo đúng chuẩn báo cáo kỹ thuật đồ án tốt nghiệp (ISO 7144:1986). Sinh viên viết trực tiếp vào file này, chỉ chỉnh sửa nội dung, và không viết trên file mới.
+
+% \textbf{Khi đóng quyển ĐATN}, sinh viên cần lưu ý tuân thủ hướng dẫn ở phụ lục A.9
+
+% \textbf{SV cần đặc biệt lưu ý cách hành văn}. Mỗi đoạn văn không được quá dài và cần có ý tứ rõ ràng, bao gồm duy nhất một ý chính và các ý phân tích bổ trợ để làm rõ hơn ý chính. Các câu văn trong đoạn phải đầy đủ chủ ngữ vị ngữ, cùng hướng đến chủ đề chung. Câu sau phải liên kết với câu trước, đoạn sau liên kết với đoạn trước. Trong văn phong khoa học, sinh viên không được dùng từ trong văn nói, không dùng các từ phóng đại, thái quá, các từ thiếu khách quan, thiên về cảm xúc, về quan điểm cá nhân như “tuyệt vời”, “cực hay”, “cực kỳ hữu ích”, v.v. Các câu văn cần được tối ưu hóa, đảm bảo rất khó để thể thêm hoặc bớt đi được dù chỉ một từ. Cách diễn đạt cần ngắn gọn, súc tích, không dài dòng.
+
+% Mẫu ĐATN này được thiết kế phù hợp nhất với đa số các đề tài xây dựng phần mềm ứng dụng. Với các dạng đề tài khác (giải pháp, nghiên cứu, phần mềm đặc thù, v.v.), sinh viên dựa trên cấu trúc và hướng dẫn của báo cáo này để đề xuất và trao đổi với giáo viên hướng dẫn để thiết kế khung báo cáo đồ án cho phù hợp. Sinh viên lưu ý \textbf{trong mọi trường hợp, SV luôn phải sử dụng định dạng báo cáo này, và phải đọc kỹ toàn bộ các hướng dẫn từ đầu tới cuối.} Các hướng dẫn không chỉ áp dụng riêng cho đề tài ứng dụng, mà còn phù hợp với các dạng đề tài khác. Ngoài ra, trong mẫu ĐATN này đã được tích hợp một số hướng dẫn dành riêng cho đề tài nghiên cứu.
+
+% Chương 1 có độ dài từ 3 đến 6 trang với các nội dung sau đây
+
+\section{Đặt vấn đề}
+\label{section:1.1}
+% Khi đặt vấn đề, sinh viên cần làm nổi bật mức độ cấp thiết, tầm quan trọng và/hoặc quy mô của bài toán của mình.
+
+% Gợi ý cách trình bày cho sinh viên: Xuất phát từ tình hình thực tế gì, dẫn đến vấn đề hoặc bài toán gì. Vấn đề hoặc bài toán đó, nếu được giải quyết, đem lại lợi ích gì, cho những ai, còn có thể được áp dụng vào các lĩnh vực khác nữa không. Sinh viên cần lưu ý phần này chỉ trình bày vấn đề, tuyệt đối không trình bày giải pháp.
+Trong bối cảnh toàn cầu hóa và chuyển đổi số mạnh mẽ, thương mại điện tử (TMĐT) đã trở thành một kênh giao dịch chủ đạo, thay đổi thói quen tiêu dùng của hàng triệu người trên thế giới. Đặc biệt, sự phổ biến nhanh chóng của điện thoại thông minh cùng với mạng di động tốc độ cao đã tạo điều kiện thuận lợi để TMĐT trên nền tảng di động (mobile commerce) phát triển vượt bậc. Tại Việt Nam, theo các báo cáo gần đây, tỷ lệ người tiêu dùng sử dụng thiết bị di động để truy cập và thực hiện các giao dịch mua sắm trực tuyến chiếm đến hơn 70\%, và con số này vẫn không ngừng gia tăng. Điều này phản ánh xu hướng tất yếu của hành vi tiêu dùng hiện đại: nhanh chóng, tiện lợi và linh hoạt.
+
+Tuy nhiên, TMĐT trên mobile vẫn tồn tại nhiều vấn đề thực tiễn đáng quan ngại. Giao diện và trải nghiệm người dùng (UX) trên nhiều ứng dụng chưa được tối ưu hóa cho các thiết bị có kích thước màn hình nhỏ, gây khó khăn trong thao tác và dễ dẫn đến việc bỏ giỏ hàng. Bên cạnh đó, tốc độ tải chậm, lỗi hiển thị, gián đoạn kết nối hay thông báo quá tải cũng ảnh hưởng trực tiếp đến quyết định mua hàng. Vấn đề bảo mật và quyền riêng tư cũng là mối lo hàng đầu, khi ngày càng nhiều người dùng bị lộ thông tin cá nhân hoặc gặp phải các vụ lừa đảo qua nền tảng di động. Ngoài ra, các hệ thống thanh toán trực tuyến trên mobile vẫn chưa thực sự đồng bộ và thuận tiện, khiến nhiều người tiêu dùng, đặc biệt là nhóm người trung niên hoặc vùng nông thôn, e ngại khi mua sắm qua điện thoại.
+
+Tình trạng này đặt ra yêu cầu cấp thiết đối với các doanh nghiệp và nhà phát triển hệ thống TMĐT: cần nhanh chóng cải tiến trải nghiệm người dùng trên mobile, đảm bảo tính ổn định và an toàn của hệ thống, đồng thời tạo ra các giải pháp thân thiện hơn với đa dạng đối tượng người dùng. Việc nâng cao chất lượng TMĐT trên di động không chỉ giúp tăng trưởng doanh số và mở rộng thị trường mà còn góp phần đẩy mạnh tiến trình số hóa nền kinh tế quốc gia. Do đó, vấn đề này có tính thời sự, cấp bách và mang ý nghĩa thực tiễn sâu sắc trong bối cảnh hiện nay.
+
+
+\section{Mục tiêu và phạm vi đề tài}
+\label{section:1.2}
+% Sinh viên trước tiên cần trình bày tổng quan các kết quả của các nghiên cứu hiện nay cho bài toán giới thiệu ở phần \ref{section:1.1} (đối với đề tài nghiên cứu), hoặc về các sản phẩm hiện tại/về nhu cầu của người dùng (đối với đề tài ứng dụng). Tiếp đến, sinh viên tiến hành so sánh và đánh giá tổng quan các sản phẩm/nghiên cứu này.
+Nhằm mục đích khảo sát và tìm giải pháp cho đề tài em vừa nêu trên, em đã thử trải nghiệm hai ứng dụng Shopee, TiktokShop.Từ đó em xác định những yếu tố, tính năng mà mình có thể học hỏi và có thể cải tiến cho hệ thống của mình.
+
+Hiện nay, các nền tảng thương mại điện tử phổ biến như Shopee, Lazada, Tiki hay Amazon đều đã phát triển mạnh mẽ trên nền tảng di động, đáp ứng tương đối đầy đủ các nhu cầu cơ bản của người tiêu dùng như tìm kiếm sản phẩm, mua hàng, thanh toán trực tuyến và theo dõi đơn hàng. Nhiều ứng dụng còn tích hợp ví điện tử, hỗ trợ giao hàng nhanh và thường xuyên tung ra các chương trình khuyến mãi, giảm giá hấp dẫn để thu hút người dùng. Tuy nhiên, hầu hết các ứng dụng này vẫn đang khai thác theo hướng đại trà, chưa cá nhân hóa sâu sát hành vi người dùng, và phần lớn trải nghiệm mua sắm vẫn mang tính đơn lẻ, thiếu tính kết nối cộng đồng và động lực sử dụng lâu dài.
+
+Ứng dụng của em được phát triển với định hướng kế thừa những tính năng cơ bản của các nền tảng TMĐT hiện nay nhưng đồng thời tạo ra những điểm đột phá để nâng cao trải nghiệm người dùng. 
+
+\begin{itemize}
+
+\item Thứ nhất, ứng dụng áp dụng mô hình học máy (Machine Learning) để phân tích hành vi người dùng và đưa ra gợi ý sản phẩm được cá nhân hóa, giúp người dùng tiếp cận đúng nhu cầu nhanh hơn, chính xác hơn. 
+\item Thứ hai, tính năng săn sale theo nhóm cho phép người dùng kết bạn và cùng nhau tham gia vào các chương trình giảm giá, tạo ra sự tương tác xã hội và tối ưu hóa chi phí mua sắm.
+\item Thứ ba, hệ thống nhiệm vụ và thử thách theo ngày/tuần mang đến trải nghiệm mới mẻ, giúp tăng mức độ gắn bó với ứng dụng thông qua cơ chế tích điểm thưởng và đổi thưởng lấy voucher, giảm tiền hấp dẫn.
+\item Thứ tư, xây dựng chatbot tự động hóa quy trình mua sắm, hỗ trợ người dùng mới có những trải nghiệm đầy thú vị, đơn giản khi chỉ cần vài câu lệnh hay vài lần click các button gợi ý của bot là có thể hoàn thành quy trình mua sắm của riêng mình.
+\end{itemize}
+% Dựa trên các phân tích và đánh giá ở trên, sinh viên khái quát lại các hạn chế hiện tại đang gặp phải. Trên cơ sở đó, sinh viên sẽ hướng tới giải quyết vấn đề cụ thể gì, khắc phục hạn chế gì, phát triển phần mềm \textbf{có các chức năng chính gì}, tạo nên đột phá gì, v.v.
+
+% Trong phần này, sinh viên lưu ý chỉ trình bày tổng quan, không đi vào chi tiết của vấn đề hoặc giải pháp. Nội dung chi tiết sẽ được trình bày trong các chương tiếp theo, đặc biệt là trong Chương 5.
+
+
+\section{Định hướng giải pháp}
+\label{section:1.3}
+% Từ việc xác định rõ nhiệm vụ cần giải quyết ở phần \ref{section:1.2}, sinh viên đề xuất định hướng giải pháp của mình theo trình tự sau: (i) Sinh viên trước tiên trình bày sẽ giải quyết vấn đề theo định hướng, phương pháp, thuật toán, kỹ thuật, hay công nghệ nào; Tiếp theo, (ii) sinh viên mô tả ngắn gọn giải pháp của mình là gì (khi đi theo định hướng/phương pháp nêu trên); và sau cùng, (iii) sinh viên trình bày đóng góp chính của đồ án là gì, kết quả đạt được là gì.
+% Sinh viên lưu ý không giải thích hoặc phân tích chi tiết công nghệ/thuật toán trong phần này. Sinh viên chỉ cần nêu tên định hướng công nghệ/thuật toán, mô tả ngắn gọn trong một đến hai câu và giải thích nhanh lý do lựa chọn.
+Để xây dựng một hệ thống đáp ứng đầy đủ những chức năng mà em nêu ra ở trên, em đã quyết định xây dựng một mô hình MVC cho ứng dụng của mình, sử dụng framework  Flutter \cite{Flutter} đơn giản hóa quá trình phát triển ứng dụng đa nền tảng,  cung cấp bộ công cụ mạnh mẽ, linh hoạt giúp xây dựng ứng dụng với giao diện đẹp, mượt mà và hiệu suất cao.
+
+Về phía Web Admin dành cho quản trị viên, em sử dụng thư viện ReactJs \cite{ReactJS} để xây dựng phần giao diện và thực hiện các thao tác gửi và nhận dữ liệu với server backend sử dụng framework Spring Boot \cite{SpringBoot}.
+
+Cơ sở dữ liệu của ứng dụng được lưu trữ trên dịch vụ cơ sở dữ liệu trực tuyến Firebase \cite{Firebase}, đồng bộ thời gian thực, dễ dàng tích hợp cho cả web và mobile, xác thực người dùng mạnh mẽ, cấu trúc NoSQL linh hoạt và có khả năng bảo mật, phân quyền tốt.
+
+Hệ thống thông báo em sử dụng Firebase Cloud Messaging \cite{FirebaseCloudMessaging}, được thiết kế đặc biệt để hoạt động hiệu quả trên cả Android và IOS, có thể gửi thông báo cá nhân hóa theo từng người dùng hoặc nhóm người dùng, gửi theo thời gian thực.
+
+Về thuật toán gợi ý, em sử dụng mô hình LightFM \cite{LightFM} vì kết hợp được cả Collaborative Filtering và Content-Based Filtering, hơn nữa giúp giải quyết hiệu quả vấn đề "cold-start".
+
+Về xây dụng chatbot, em có sử dụng framework của RASA \cite{RasaFramework} hỗ trợ xây dựng chatbot nhanh, dễ dàng mở rộng và tùy chỉnh, linh hoạt xử lý các logic khác nhau.
+
+Cuối cùng, em có tích hợp API của một số bên thứ ba:
+
+\begin{itemize}
+\renewcommand\labelitemi{\textbullet}
+\item API của GHN để tự động tạo đơn, lấy thông tin giao hàng
+\item API của Stripe để tích hợp thanh toán điện tử
+\end{itemize}
+\section{Bố cục đồ án}
+\label{section:1.4}
+Phần còn lại của báo cáo đồ án tốt nghiệp này được tổ chức như sau. 
+
+Chương 2 trình bày về phân tích yêu cầu của hệ thống thương mại điện tử trên mobile. Ở đây em sẽ sử dụng biểu đồ use case và đặc tả use case để miêu tả chi tiết các quy trình sử dụng hệ thống.
+
+Trong chương 3, em sẽ trình bày về các công nghệ được sử dụng trong hệ thống. Trong chương này, em sẽ giới thiệu các công nghệ một cách cụ thể hơn và lý do chúng được sử dụng.
+
+
+Chương 4 trình bày về kết quả thực nghiệm của hệ thống. Trong chương này, em sẽ trình bày về phân tích kiến trúc của hê thống, phân tích chi tiết các thành phần của hệ thống như giao diện, lớp và cơ sở dữ liệu. Cuối cùng, em sẽ trình bày các công cụ và thư viện mà em đã sử dụng để xây dụng hệ thống của mình.
+
+
+Chương 5 trình bày về giải pháp và đóng góp của em trong đồ án. Trong chương này, em sẽ trình bày về những khó khăn mà em đã gặp phải trong quá trình thực hiện đồ án và cách mà em đã giải quyết chúng.
+
+Chương 6 đưa ra kết luận về ưu điểm, hạn chế của hệ thống so với những hệ thống tương tự đã có trên thị trường hiện nay và kiến thức kĩ năng mà em đã đạt được trong quá trình làm đồ án.
+
+
+Vậy là trong chương 1, em đã trình bày lý do chọn đề tài, cơ sở xây dựng đồ án, mục tiêu đề tài và cấu trúc của đồ án. Sau đây, em sẽ trình bày nội dung của Chương 2 - Phân tích yêu cầu.
+
+
+% \textbf{Chú ý:} Sinh viên cần viết mô tả thành đoạn văn đầy đủ về nội dung chương. Tuyệt đối không viết ý hay gạch đầu dòng. Chương 1 không cần mô tả trong phần này. 
+
+% Ví dụ tham khảo mô tả chương trong phần bố cục đồ án tốt nghiệp: Chương *** trình bày đóng góp chính của đồ án, đó là một nền tảng ABC cho phép khai phá và tích hợp nhiều nguồn dữ liệu, trong đó mỗi nguồn dữ liệu lại có định dạng đặc thù riêng. Nền tảng ABC được phát triển dựa trên khái niệm DEF, là các module ngữ nghĩa trợ giúp người dùng tìm kiếm, tích hợp và hiển thị trực quan dữ liệu theo mô hình cộng tác và mô hình phân tán.
+
+% \textbf{Chú ý:} Trong phần nội dung chính, mỗi chương của đồ án nên có phần Tổng quan và Kết chương. Hai phần này đều có định dạng văn bản “Normal”, sinh viên không cần tạo định dạng riêng, ví dụ như không in đậm/in nghiêng, không đóng khung, v.v. 
+
+% Trong phần Tổng quan của chương N, sinh viên nên có sự liên kết với chương N-1 rồi trình bày sơ qua lý do có mặt của chương N và sự cần thiết của chương này trong đồ án. Sau đó giới thiệu những vấn đề sẽ trình bày trong chương này là gì, trong các đề mục lớn nào.
+
+% Ví dụ về phần Tổng quan: Chương 3 đã thảo luận về nguồn gốc ra đời, cơ sở lý thuyết và các nhiệm vụ chính của bài toán tích hợp dữ liệu. Chương 4 này sẽ trình bày chi tiết các công cụ tích hợp dữ liệu theo hướng tiếp cận “mashup”. Với mục đích và phạm vi của đề tài, sáu nhóm công cụ tích hợp dữ liệu chính được trình bày bao gồm: (i) nhóm công cụ ABC trong phần 4.1, (ii) nhóm công cụ DEF trong phần 4.2, nhóm công cụ GHK trong phần 4.3, v.v.
+
+% Trong phần Kết chương, sinh viên đưa ra một số kết luận quan trọng của chương. Những vấn đề mở ra trong Tổng quan cần được tóm tắt lại nội dung và cách giải quyết/thực hiện như thế nào. Sinh viên lưu ý không viết Kết chương giống hệt Tổng quan. Sau khi đọc phần Kết chương, người đọc sẽ nắm được sơ bộ nội dung và giải pháp cho các vấn đề đã trình bày trong chương. Trong Kết chương, Sinh viên nên có thêm câu liên kết tới chương tiếp theo.
+
+% Ví dụ về phần Kết chương: Chương này đã phân tích chi tiết sáu nhóm công cụ tích hợp dữ liệu. Nhóm công cụ ABC và DEF thích hợp với những bài toán tích hợp dữ liệu phạm vi nhỏ. Trong khi đó, nhóm công cụ GHK lại chứng tỏ thế mạnh của mình với những bài toán cần độ chính xác cao, v.v. Từ kết quả nghiên cứu và phân tích về sáu nhóm công cụ tích hợp dữ liệu này, tôi đã thực hiện phát triển phần mềm tự động bóc tách và tích hợp dữ liệu sử dụng nhóm công cụ GHK. Phần này được trình bày trong chương tiếp theo – Chương 5.
+
+\end{document}
